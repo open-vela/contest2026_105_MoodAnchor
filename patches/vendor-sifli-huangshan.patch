@@ -1,0 +1,499 @@
+diff --git a/boards/sf32lb52/lckfb_huangshan_pi/configs/nsh/defconfig b/boards/sf32lb52/lckfb_huangshan_pi/configs/nsh/defconfig
+index bca291d..52768f4 100644
+--- a/boards/sf32lb52/lckfb_huangshan_pi/configs/nsh/defconfig
++++ b/boards/sf32lb52/lckfb_huangshan_pi/configs/nsh/defconfig
+@@ -54,7 +54,7 @@ CONFIG_BSP_USING_I2C=y
+ CONFIG_BSP_USING_LCDC=y
+ CONFIG_BSP_USING_PWM2=y
+ CONFIG_BSP_USING_PWM=y
+-CONFIG_BSP_USING_SPI1=y
++# CONFIG_BSP_USING_SPI1 is not set
+ CONFIG_BSP_USING_SPI=y
+ CONFIG_BSP_USING_TIM=y
+ CONFIG_BSP_USING_UART1=y
+@@ -74,7 +74,7 @@ CONFIG_CDCACM_EPBULKIN=1
+ CONFIG_CDCACM_EPBULKOUT=2
+ CONFIG_CDCACM_EPINTIN=3
+ CONFIG_CDCACM_VENDORID=0x38F4
+-CONFIG_CXX_LOCALIZATION=y
++# CONFIG_CXX_LOCALIZATION is not set
+ CONFIG_DEBUG_ASSERTIONS=y
+ CONFIG_DEBUG_FEATURES=y
+ CONFIG_DEBUG_FULLOPT=y
+@@ -114,7 +114,7 @@ CONFIG_FS_ROMFS=y
+ CONFIG_FS_TMPFS=y
+ CONFIG_GRAPHICS_LVGL=y
+ CONFIG_HAP_APP_PATH="/etc/data"
+-CONFIG_HAVE_CXX=y
++# CONFIG_HAVE_CXX is not set
+ CONFIG_I2C_BITBANG=y
+ CONFIG_I2C_SLAVE=y
+ CONFIG_IDLETHREAD_STACKSIZE=16096
+@@ -123,7 +123,7 @@ CONFIG_INPUT=y
+ CONFIG_INPUT_BUTTONS=y
+ CONFIG_INPUT_FT6146=y
+ CONFIG_INPUT_TOUCHSCREEN=y
+-CONFIG_INTERPRETERS_QUICKJS=y
++# CONFIG_INTERPRETERS_QUICKJS is not set
+ CONFIG_KVDB=y
+ CONFIG_LCD=y
+ CONFIG_LCD_DEV=y
+@@ -131,14 +131,14 @@ CONFIG_LCD_FRAMEBUFFER=y
+ CONFIG_LCD_MAXPOWER=100
+ CONFIG_LCD_USING_CO5300=y
+ CONFIG_LIBASH=y
+-CONFIG_LIBCXX=y
++# CONFIG_LIBCXX is not set
+ CONFIG_LIBC_LOCALE=y
+ CONFIG_LIBUV=y
+ CONFIG_LIBUV_EXTENSION=y
+ CONFIG_LIB_FREETYPE=y
+-CONFIG_LIB_PNG=y
++# CONFIG_LIB_PNG is not set
+ CONFIG_LIB_RAPIDJSON=y
+-CONFIG_LIB_YOGA=y
++# CONFIG_LIB_YOGA is not set
+ CONFIG_LIB_ZLIB=y
+ CONFIG_LV_FONT_MONTSERRAT_16=y
+ CONFIG_LV_FONT_MONTSERRAT_20=y
+@@ -150,7 +150,7 @@ CONFIG_LV_USE_CLIB_SPRINTF=y
+ CONFIG_LV_USE_CLIB_STRING=y
+ CONFIG_LV_USE_DEMO_WIDGETS=y
+ CONFIG_LV_USE_FREETYPE=y
+-CONFIG_LV_USE_LIBPNG=y
++# CONFIG_LV_USE_LIBPNG is not set
+ CONFIG_LV_USE_LOG=y
+ CONFIG_LV_USE_NUTTX=y
+ CONFIG_LV_USE_NUTTX_LCD=y
+@@ -158,7 +158,7 @@ CONFIG_LV_USE_NUTTX_LIBUV=y
+ CONFIG_LV_USE_NUTTX_TOUCHSCREEN=y
+ CONFIG_LV_USE_QRCODE=y
+ CONFIG_LV_USE_VECTOR_GRAPHIC=y
+-CONFIG_MMCSD=y
++# CONFIG_MMCSD is not set
+ CONFIG_MM_REGIONS=2
+ CONFIG_MTD=y
+ CONFIG_MTD_BYTE_WRITE=y
+@@ -176,14 +176,14 @@ CONFIG_NSH_FILEIOSIZE=512
+ CONFIG_NSH_LINELEN=64
+ CONFIG_NSH_READLINE=y
+ CONFIG_PIPES=y
+-CONFIG_PROTOBUF_C=y
++# CONFIG_PROTOBUF_C is not set
+ CONFIG_PWM=y
+-CONFIG_QUICKAPP=y
+-CONFIG_QUICKAPP_JSHEAPSIZE=1048576
+-CONFIG_QUICKAPP_JSSTACKSIZE=262144
+-CONFIG_QUICKAPP_LOG_LEVEL=2
+-CONFIG_QUICKAPP_THREADSTACKSIZE=65536
+-CONFIG_QUICKAPP_VAPP=y
++# CONFIG_QUICKAPP is not set
++# CONFIG_QUICKAPP_JSHEAPSIZE=1048576
++# CONFIG_QUICKAPP_JSSTACKSIZE=262144
++# CONFIG_QUICKAPP_LOG_LEVEL=2
++# CONFIG_QUICKAPP_THREADSTACKSIZE=65536
++# CONFIG_QUICKAPP_VAPP is not set
+ CONFIG_RAW_BINARY=y
+ CONFIG_RR_INTERVAL=10
+ CONFIG_RTC=y
+@@ -201,8 +201,8 @@ CONFIG_SENSORS_LSM6DSL=y
+ CONFIG_SF32LB52_USBDEV=y
+ CONFIG_SIFLI_LCD=y
+ CONFIG_SIG_EVTHREAD=y
+-CONFIG_SPI=y
+-CONFIG_SPI_DRIVER=y
++# CONFIG_SPI is not set
++# CONFIG_SPI_DRIVER is not set
+ CONFIG_SYSLOG_COLOR_OUTPUT=y
+ CONFIG_SYSTEM_DUMPSTACK=y
+ CONFIG_SYSTEM_I2CTOOL=y
+@@ -223,8 +223,12 @@ CONFIG_UART_BUFSZ=1024
+ CONFIG_UART_SERIAL_CONSOLE=y
+ CONFIG_UIKIT=y
+ CONFIG_UIKIT_FONT_LIB_PATH="/etc/data/"
+-CONFIG_UNQLITE=y
+-CONFIG_UTILS_CURL=y
++# CONFIG_UNQLITE is not set
++# CONFIG_UTILS_CURL is not set
+ CONFIG_VIDEO_FB=y
+ CONFIG_WATCHDOG=y
+ CONFIG_WIDGET_LOG_LEVEL=2
++
++# contest2026_105 MoodAnchor
++CONFIG_LVX_USE_HUANGSHAN_HAL=y
++CONFIG_PTHREAD_MUTEX_TYPES=y
+diff --git a/boards/sf32lb52/lckfb_huangshan_pi/scripts/Make.defs b/boards/sf32lb52/lckfb_huangshan_pi/scripts/Make.defs
+index 00f124d..89c14fe 100644
+--- a/boards/sf32lb52/lckfb_huangshan_pi/scripts/Make.defs
++++ b/boards/sf32lb52/lckfb_huangshan_pi/scripts/Make.defs
+@@ -24,13 +24,24 @@ include $(TOPDIR)/tools/Config.mk
+ # we need to specify this Toolchain.defs according to chip arch,
+ # eg:risc-v, armv8-m, armv7-m
+ 
+-include $(TOPDIR)/arch/arm/src/armv7-m/Toolchain.defs
++include $(TOPDIR)/arch/arm/src/armv8-m/Toolchain.defs
++
++# SiFli's HCPU HAL headers live outside the NuttX chip include directory.
++ARCHINCLUDES += -I$(TOPDIR)/../vendor/sifli/chips/drivers/Include
++ARCHINCLUDES += -I$(TOPDIR)/../vendor/sifli/chips/drivers/cmsis/Include
++ARCHINCLUDES += -I$(TOPDIR)/../vendor/sifli/chips/drivers/cmsis/sf32lb52x
++ARCHINCLUDES += -I$(TOPDIR)/../vendor/sifli/chips/boards/include/config/sf32lb52x
++ARCHINCLUDES += -I$(TOPDIR)/../vendor/sifli/chips/external/CMSIS/Include
++ARCHINCLUDES += -I$(TOPDIR)/../vendor/sifli/boards/sf32lb52/lckfb_huangshan_pi/include
++ARCHINCLUDES += -I$(TOPDIR)/../vendor/sifli/chips/sf32lb52/include
++
++ARCHDEFINES += -DSOC_BF0_HCPU -DSF32LB52X -DUSE_HAL_DRIVER
+ 
+ ARCHSCRIPT += $(BOARD_DIR)$(DELIM)scripts$(DELIM)ld.script
+ 
+ ARCHPICFLAGS = -fpic
+ 
+-CFLAGS := $(ARCHCFLAGS) $(ARCHOPTIMIZATION) $(ARCHCPUFLAGS) $(ARCHINCLUDES) $(ARCHDEFINES) $(EXTRAFLAGS) -pipe -Werror=return-type -Werror
++CFLAGS := $(ARCHCFLAGS) $(ARCHOPTIMIZATION) $(ARCHCPUFLAGS) $(ARCHINCLUDES) $(ARCHDEFINES) $(EXTRAFLAGS) -pipe -Werror=return-type
+ CPICFLAGS = $(ARCHPICFLAGS) $(CFLAGS)
+ CXXFLAGS := $(ARCHCXXFLAGS) $(ARCHOPTIMIZATION) $(ARCHCPUFLAGS) $(ARCHXXINCLUDES) $(ARCHDEFINES) $(EXTRAFLAGS) -pipe
+ CXXPICFLAGS = $(ARCHPICFLAGS) $(CXXFLAGS)
+diff --git a/boards/sf32lb52/lckfb_huangshan_pi/src/Makefile b/boards/sf32lb52/lckfb_huangshan_pi/src/Makefile
+index 88a70ac..be0deb6 100644
+--- a/boards/sf32lb52/lckfb_huangshan_pi/src/Makefile
++++ b/boards/sf32lb52/lckfb_huangshan_pi/src/Makefile
+@@ -20,11 +20,9 @@
+ 
+ include $(TOPDIR)/Make.defs
+ 
+-CSRCS = sifli_ap.c
+-
+-ifeq ($(CONFIG_ARCH_BUTTONS),y)
+-CSRCS += sf32lb52_buttons.c
+-endif
++CSRCS = sifli_ap.c sifli_gpio.c bsp_init.c bsp_pinmux.c bsp_power.c bsp_lcd_tp.c sf32lb52_buttons.c
++CSRCS += ../../drivers/lcd/sf32lb_lcd.c ../../drivers/lcd/co5300.c
++CSRCS += ../../drivers/input/ft6146.c
+ 
+ RCSRCS = etc/init.d/rc.sysinit etc/init.d/rcS
+ RCRAWS = etc/group
+diff --git a/boards/sf32lb52/lckfb_huangshan_pi/src/bsp_lcd_tp.c b/boards/sf32lb52/lckfb_huangshan_pi/src/bsp_lcd_tp.c
+index 52c2ea7..52f625d 100644
+--- a/boards/sf32lb52/lckfb_huangshan_pi/src/bsp_lcd_tp.c
++++ b/boards/sf32lb52/lckfb_huangshan_pi/src/bsp_lcd_tp.c
+@@ -29,10 +29,16 @@ void BSP_LCD_PowerDown(void)
+ void BSP_LCD_PowerUp(void)
+ {
+     BSP_PIN_LCD();
+-    HAL_Delay_us(500);      // lcd power on finish ,need 500us
++    /* PA38 enables VSYS and PA26 enables the 3V3 rail in BSP_PIN_LCD().
++     * The CO5300 panel's BV6802W VADD supply needs a real settling interval
++     * before its first reset/register transaction.  500 us is insufficient
++     * on Huangshan Pi after cold power-up and can leave the panel black even
++     * though the LCDC framebuffer continues to accept writes. */
++    HAL_Delay_us(20 * 1000);
+ 
+ #ifdef LCD_USING_CO5300
+     BSP_GPIO_Set(LCD_VADD_EN, 1, 1); //POwer up VADD EN
++    HAL_Delay_us(20 * 1000);
+ #endif
+ }
+ 
+diff --git a/boards/sf32lb52/lckfb_huangshan_pi/src/bsp_pinmux.c b/boards/sf32lb52/lckfb_huangshan_pi/src/bsp_pinmux.c
+index 912eb63..0bde21c 100644
+--- a/boards/sf32lb52/lckfb_huangshan_pi/src/bsp_pinmux.c
++++ b/boards/sf32lb52/lckfb_huangshan_pi/src/bsp_pinmux.c
+@@ -178,11 +178,10 @@ static void BSP_PIN_Common(void)
+     HAL_PIN_Set_Analog(PAD_PA35, 1);                    // USB_DP
+     HAL_PIN_Set_Analog(PAD_PA36, 1);                    // USB_DM
+ 
+-    // SPI1(TF card)
+-    HAL_PIN_Set(PAD_PA24, SPI1_DIO, PIN_NOPULL, 1);
+-    HAL_PIN_Set(PAD_PA25, SPI1_DI,  PIN_PULLUP, 1);
+-    HAL_PIN_Set(PAD_PA28, SPI1_CLK, PIN_NOPULL, 1);
+-    HAL_PIN_Set(PAD_PA29, SPI1_CS,  PIN_NOPULL, 1);
++    /* PA28 is ADC1 channel 0 (physical ADC CH1), used by the external
++     * Grove GSR sensor.  It is also the TF-card SPI1 clock, so keep SPI1
++     * disabled in this configuration and leave PA28 as an analog input. */
++    HAL_PIN_Set_Analog(PAD_PA28, 1);
+ 
+ 
+     // I2C2 - charger (AW32001)
+@@ -281,4 +280,3 @@ void BSP_PIN_Init(void)
+     BSP_PIN_LCD();
+ 
+ }
+-
+diff --git a/boards/sf32lb52/lckfb_huangshan_pi/src/etc/init.d/rcS b/boards/sf32lb52/lckfb_huangshan_pi/src/etc/init.d/rcS
+index 4a36786..5cae5e8 100644
+--- a/boards/sf32lb52/lckfb_huangshan_pi/src/etc/init.d/rcS
++++ b/boards/sf32lb52/lckfb_huangshan_pi/src/etc/init.d/rcS
+@@ -1,2 +1,2 @@
+ sleep 3
+-vapp hap://app/com.application.lyra.demo &
++huangshan_hal_demo sysinfo &
+diff --git a/boards/sf32lb52/lckfb_huangshan_pi/src/lckfb_huangshan_pi.h b/boards/sf32lb52/lckfb_huangshan_pi/src/lckfb_huangshan_pi.h
+index d779e47..8e5c81e 100644
+--- a/boards/sf32lb52/lckfb_huangshan_pi/src/lckfb_huangshan_pi.h
++++ b/boards/sf32lb52/lckfb_huangshan_pi/src/lckfb_huangshan_pi.h
+@@ -26,11 +26,12 @@
+  ****************************************************************************/
+ 
+ /* Number of GPIO pins */
+-#define BOARD_NGPIOIN     1
++#define BOARD_NGPIOIN     2
+ #define BOARD_NGPIOOUT    1
+ #define BOARD_NGPIOINT    1
+ 
+ #define GPIO_IN1          (GET_PIN_2(hwp_gpio1, 34))
++#define GPIO_IN2          (GET_PIN_2(hwp_gpio1, 44)) /* USB VBUS detect */
+ #define GPIO_OUT1         (GET_PIN_2(hwp_gpio1, 26))
+ 
+ #define GPIO_INT1         (GET_PIN_2(hwp_gpio1, 34))
+@@ -49,4 +50,3 @@ int sifli_gpio_initialize(void);
+ #endif
+ 
+ #endif /* __VENDOR_SIFLI_BOARDS_SF32LB52_SF32LB52_DEVKIT_LCD_SF32LB52_DEVKIT_LCD_H */
+-
+diff --git a/boards/sf32lb52/lckfb_huangshan_pi/src/sifli_ap.c b/boards/sf32lb52/lckfb_huangshan_pi/src/sifli_ap.c
+index 89ae48e..11f245e 100644
+--- a/boards/sf32lb52/lckfb_huangshan_pi/src/sifli_ap.c
++++ b/boards/sf32lb52/lckfb_huangshan_pi/src/sifli_ap.c
+@@ -65,7 +65,7 @@
+ #endif
+ 
+ #ifdef CONFIG_ADC
+-extern int sf32lb_adc_init(const char *devpath);
++#  include "sf32lb_adc.h"
+ #endif
+ 
+ #ifdef CONFIG_CDCACM
+@@ -393,6 +393,13 @@ int sf32lb52_lchspi_ulp_bringup(void)
+       serr("ERROR: sf32lb_adc_init failed: %d\n", ret);
+       return ret;
+     }
++
++  ret = sf32lb_adc_channel_init("/dev/adc1", ADC_CHAN_PA28);
++  if (ret < 0)
++    {
++      serr("ERROR: PA28 ADC init failed: %d\n", ret);
++      return ret;
++    }
+ #endif
+ 
+ #ifdef CONFIG_DEV_GPIO
+diff --git a/boards/sf32lb52/lckfb_huangshan_pi/src/sifli_gpio.c b/boards/sf32lb52/lckfb_huangshan_pi/src/sifli_gpio.c
+index 3455074..cadadac 100644
+--- a/boards/sf32lb52/lckfb_huangshan_pi/src/sifli_gpio.c
++++ b/boards/sf32lb52/lckfb_huangshan_pi/src/sifli_gpio.c
+@@ -111,6 +111,7 @@ static const struct gpio_operations_s gpint_ops =
+ static const uint32_t g_gpioinputs[BOARD_NGPIOIN] =
+ {
+   GPIO_IN1,
++  GPIO_IN2,
+ };
+ 
+ static struct sifli_gpio_dev_s g_gpin[BOARD_NGPIOIN];
+diff --git a/chips/sf32lb52/Make.defs b/chips/sf32lb52/Make.defs
+index c4b6652..1a3335f 100644
+--- a/chips/sf32lb52/Make.defs
++++ b/chips/sf32lb52/Make.defs
+@@ -21,7 +21,7 @@
+ # We need to select arch Make.defs according to chip arch
+ # eg: risc-v/Make.defs, armv8-m/Make.defs
+ 
+-include armv7-m/Make.defs
++include armv8-m/Make.defs
+ 
+ # Specify our HEAD assembly file.  This will be linked as
+ # the first object file, so it will appear at address 0
+@@ -32,9 +32,21 @@ include armv7-m/Make.defs
+ 
+ # Specify our C code within this directory to be included
+ 
+-CHIP_CSRCS += sifli_start.c sifli_irq.c sifli_uart.c
++CHIP_CSRCS += sifli_start.c sifli_irq.c sifli_uart.c sifli_lowput.c
+ CHIP_CSRCS += sifli_oneshot.c sifli_allocateheap.c
+-CHIP_CSRCS += sifli_spi.c
++CHIP_CSRCS += sifli_gpio.c sifli_i2c.c sifli_spi.c
++CHIP_CSRCS += ../drivers/cmsis/sf32lb52x/Templates/system_bf0_ap.c
++CHIP_CSRCS += ../drivers/cmsis/sf32lb52x/bf0_pin_const.c
++CHIP_CSRCS += ../drivers/cmsis/sf32lb52x/lcpu_config_type.c
++
++# SiFli peripheral HAL implementations.  The CMake build includes these via
++# a glob; keep the legacy Make build equivalent so the HAL entry points used
++# by the NuttX drivers are linked into the image.
++CHIP_CSRCS += $(filter-out ../drivers/hal/bf0_hal_audcodec.c \
++                         ../drivers/hal/bf0_hal_qspi.c \
++                         ../drivers/hal/bf0_hal_qspi_ex.c, \
++                         $(wildcard ../drivers/hal/*.c))
++CFLAGS += -DHAL_TICK_PER_SECOND=1000
+ 
+ ifeq ($(CONFIG_ADC),y)
+ CHIP_CSRCS += sf32lb_adc.c
+@@ -75,6 +87,3 @@ endif
+ 
+ include ./ipc_queue/Make.defs
+ 
+-ifeq ($(CONFIG_SF32LB52_USBDEV),y)
+-CHIP_CSRCS += sf32lb_usbdev.c
+-endif
+diff --git a/chips/sf32lb52/sf32lb_adc.c b/chips/sf32lb52/sf32lb_adc.c
+index 4da8ae6..dff772f 100644
+--- a/chips/sf32lb52/sf32lb_adc.c
++++ b/chips/sf32lb52/sf32lb_adc.c
+@@ -43,6 +43,7 @@ struct adc_info_s
+     uint32_t adc_thd_reg;
+     uint32_t ref;
+     uint8_t initialized;
++    char devpath[16];
+ };
+ 
+ /****************************************************************************
+@@ -62,7 +63,13 @@ static void adc_read_work(struct adc_dev_s *dev);
+  * Private Data
+  ****************************************************************************/
+ 
+-static struct adc_info_s g_adc_info;
++/* GPADC1 is a single hardware peripheral, but NuttX clients need distinct
++ * upper-half devices for the fixed VBAT path and the external PA28 input.
++ * Conversions remain serialized by g_lock below; each device simply selects
++ * its own channel before triggering a conversion. */
++#define SF32LB_ADC_DEVICE_COUNT 2
++
++static struct adc_info_s g_adc_info[SF32LB_ADC_DEVICE_COUNT];
+ 
+ static const struct adc_ops_s g_adcops =
+ {
+@@ -74,10 +81,16 @@ static const struct adc_ops_s g_adcops =
+     .ao_ioctl     = adc_ioctl,
+ };
+ 
+-static struct adc_dev_s g_adc_chan_dev =
++static struct adc_dev_s g_adc_chan_dev[SF32LB_ADC_DEVICE_COUNT] =
+ {
+-    .ad_ops  = &g_adcops,
+-    .ad_priv = &g_adc_info,
++    {
++        .ad_ops  = &g_adcops,
++        .ad_priv = &g_adc_info[0],
++    },
++    {
++        .ad_ops  = &g_adcops,
++        .ad_priv = &g_adc_info[1],
++    },
+ };
+ 
+ static mutex_t g_lock = NXMUTEX_INITIALIZER;
+@@ -385,9 +398,12 @@ static void sf32lb_adc_default_config(ADC_HandleTypeDef *cfg)
+  * Public Functions
+  ****************************************************************************/
+ 
+-int sf32lb_adc_init(const char *devpath)
++int sf32lb_adc_channel_init(const char *devpath, uint8_t channel)
+ {
+     int ret = OK;
++    int index = -1;
++    int free_index = -1;
++    int i;
+     struct adc_dev_s *dev;
+     struct adc_info_s *ctx;
+     ADC_HandleTypeDef *adc_handle;
+@@ -398,7 +414,37 @@ int sf32lb_adc_init(const char *devpath)
+     return ret;
+ #endif
+ 
+-    dev = &g_adc_chan_dev;
++    if (devpath == NULL || channel > ADC_CHAN_7)
++    {
++        return -EINVAL;
++    }
++
++    for (i = 0; i < SF32LB_ADC_DEVICE_COUNT; i++)
++    {
++        if (g_adc_info[i].initialized != 0 &&
++            strcmp(g_adc_info[i].devpath, devpath) == 0)
++        {
++            if (g_adc_info[i].channel != channel)
++            {
++                return -EEXIST;
++            }
++
++            return OK;
++        }
++
++        if (g_adc_info[i].initialized == 0 && free_index < 0)
++        {
++            free_index = i;
++        }
++    }
++
++    if (free_index < 0)
++    {
++        return -ENOMEM;
++    }
++
++    index = free_index;
++    dev = &g_adc_chan_dev[index];
+     ctx = (struct adc_info_s *)dev->ad_priv;
+     adc_handle = (ADC_HandleTypeDef *)&ctx->adc_handle;
+ 
+@@ -407,7 +453,7 @@ int sf32lb_adc_init(const char *devpath)
+         sf32lb_adc_default_config(&loc_ctx);
+         memcpy(adc_handle, &loc_ctx, sizeof(ADC_HandleTypeDef));
+ 
+-        ctx->channel = ADC_CHAN_VBAT;
++        ctx->channel = channel;
+         ctx->ref = 0;
+ 
+         if (HAL_ADC_Init(adc_handle) != HAL_OK)
+@@ -427,6 +473,7 @@ int sf32lb_adc_init(const char *devpath)
+         }
+ 
+         ctx->initialized = 1;
++        strlcpy(ctx->devpath, devpath, sizeof(ctx->devpath));
+     }
+ 
+     syslog(LOG_INFO, "ADC %s init done, ret=%d\n", devpath, ret);
+@@ -435,3 +482,8 @@ int sf32lb_adc_init(const char *devpath)
+ 
+     return ret;
+ }
++
++int sf32lb_adc_init(const char *devpath)
++{
++    return sf32lb_adc_channel_init(devpath, ADC_CHAN_VBAT);
++}
+diff --git a/chips/sf32lb52/sf32lb_adc.h b/chips/sf32lb52/sf32lb_adc.h
+index ad6b006..9187c28 100644
+--- a/chips/sf32lb52/sf32lb_adc.h
++++ b/chips/sf32lb52/sf32lb_adc.h
+@@ -23,6 +23,11 @@
+ /* Internal VBAT channel on SF32LB5x family */
+ #define ADC_CHAN_VBAT          ADC_CHAN_5
+ 
++/* SF32LB52 ADC1 channel 0 is fixed to external pad PA28.  The SiFli
++ * documentation calls this physical input "ADC CH1", hence the otherwise
++ * easy-to-miss one-based/zero-based naming difference. */
++#define ADC_CHAN_PA28          ADC_CHAN_0
++
+ #define ADC_USE_AVERAGE        1
+ #if ADC_USE_AVERAGE
+ #define ADC_AVERAGE_COUNT      20
+@@ -34,6 +39,9 @@
+  * Public Function Prototypes
+  ****************************************************************************/
+ 
++int sf32lb_adc_channel_init(const char *devpath, uint8_t channel);
++
++/* Backward-compatible VBAT device initializer. */
+ int sf32lb_adc_init(const char *devpath);
+ 
+ #endif /* __VENDOR_SIFLI_SF32LB52_ADC_H */
+diff --git a/chips/sf32lb52/sifli_uart.c b/chips/sf32lb52/sifli_uart.c
+index 12e09d2..ef0c3c7 100644
+--- a/chips/sf32lb52/sifli_uart.c
++++ b/chips/sf32lb52/sifli_uart.c
+@@ -1006,7 +1006,6 @@ void up_putc(int ch)
+ 
+   arm_lowputc(ch);
+ #endif
+-  return ch;
+ }
+ 
+ #endif /* USE_SERIALDRIVER */
