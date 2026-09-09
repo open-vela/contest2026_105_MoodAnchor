@@ -1,0 +1,11 @@
+config LVX_USE_HUANGSHAN_HAL
+	bool "Huangshan Pi hardware interface and demo"
+	default n
+	depends on ADC && I2C && PWM && LCD && VIDEO_FB && DRIVERS_BLUETOOTH
+	select UART_BTH4
+	---help---
+		Build the reusable SF32LB52 Huangshan Pi hardware interface and the
+		`huangshan_hal_demo` NSH command. The official vendor_sifli BSP must
+		be selected with the lckfb_huangshan_pi nsh configuration. Enabling
+		this option also enables the H:4 pseudo-device required by the BLE
+		wrapper (`/dev/ttyHCI0`).

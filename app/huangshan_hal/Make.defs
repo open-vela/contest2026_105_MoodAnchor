@@ -1,0 +1,7 @@
+############################################################################
+# Huangshan Pi hardware interface application
+############################################################################
+
+ifneq ($(CONFIG_LVX_USE_HUANGSHAN_HAL),)
+CONFIGURED_APPS += $(APPDIR)/packages/demos/contest2026_105_huangshan_hal
+endif
