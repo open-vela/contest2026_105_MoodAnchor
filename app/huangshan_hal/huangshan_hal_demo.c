@@ -6,6 +6,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1160,8 +1161,9 @@ static int hs_demo_sysinfo(void)
   struct hs_gsr_s gsr = { .adc = { .fd = -1 } };
   struct hs_buttons_s buttons = { .fd = -1 };
   struct hs_vibration_s vibration = { .fd = -1 };
+  struct hs_imu_s imu = { .fd = -1, .started = false };
+  struct hs_mic_s mic = { .fd = -1 };
   int vbus_fd = -1;
-  int imu_fd = -1;
   uint8_t found0[16];
   uint8_t found1[16];
   char line[64];
@@ -1186,7 +1188,8 @@ static int hs_demo_sysinfo(void)
   hs_buttons_open(&buttons, NULL);
   hs_vibration_open(&vibration);
   vbus_fd = open("/dev/gpio1", O_RDONLY);
-  imu_fd = open("/dev/lsm6dsl0", O_RDONLY);
+  hs_imu_open(&imu);
+  hs_mic_open(&mic, 16000);
 
   printf("sysinfo panel on, press Ctrl+C to exit\n");
 
@@ -1198,6 +1201,12 @@ static int hs_demo_sysinfo(void)
       int32_t adcval = -1;
       struct hs_gsr_sample_s gsr_sample;
       int gsrret = -ENODEV;
+      struct hs_imu_sample_s imu_sample;
+      int imuret = -ENODEV;
+      int micret = -ENODEV;
+      int mic_rms = 0;
+      int mic_peak = 0;
+      int16_t mic_samples[64];
       uint32_t button_state = 0;
       int button_ret;
       uint8_t reg = 0;
@@ -1223,6 +1232,38 @@ static int hs_demo_sysinfo(void)
       if (gsr.adc.fd >= 0)
         {
           gsrret = hs_gsr_read(&gsr, &gsr_sample);
+        }
+
+      if (imu.fd >= 0)
+        {
+          imuret = hs_imu_read(&imu, &imu_sample);
+        }
+
+      if (mic.fd >= 0)
+        {
+          ssize_t mic_count = hs_mic_read(&mic, mic_samples,
+                                          sizeof(mic_samples) /
+                                          sizeof(mic_samples[0]));
+          if (mic_count > 0)
+            {
+              int64_t sum = 0;
+              int i;
+              micret = 0;
+              for (i = 0; i < mic_count; i++)
+                {
+                  int value = mic_samples[i] < 0 ? -mic_samples[i] : mic_samples[i];
+                  if (value > mic_peak)
+                    {
+                      mic_peak = value;
+                    }
+                  sum += (int64_t)value * value;
+                }
+              mic_rms = (int)sqrt((double)(sum / mic_count));
+            }
+          else if (mic_count == 0 || errno == EAGAIN)
+            {
+              micret = -EAGAIN;
+            }
         }
 
       button_ret = -ENODEV;
@@ -1379,9 +1420,28 @@ static int hs_demo_sysinfo(void)
 
       hs_lcd_cn_text(&lcd, safe_x, y, g_cn_imu,
                      sizeof(g_cn_imu) / sizeof(g_cn_imu[0]), 0x07ff, 1);
-      snprintf(line, sizeof(line), " %u  ADC1:%u",
-               imu_fd >= 0 ? 1u : 0u,
-               gsr.adc.fd >= 0 ? 1u : 0u);
+      if (imuret >= 0)
+        {
+          snprintf(line, sizeof(line), "A:%d,%d,%d",
+                   imu_sample.accel_x_mg, imu_sample.accel_y_mg,
+                   imu_sample.accel_z_mg);
+        }
+      else
+        {
+          snprintf(line, sizeof(line), "-- (LSM6DSL)");
+        }
+      hs_lcd_text(&lcd, value_x, y + 1, line, 0x07ff, 2);
+      y += 20;
+
+      hs_lcd_text(&lcd, safe_x, y, "MIC:", 0x07ff, 2);
+      if (micret >= 0)
+        {
+          snprintf(line, sizeof(line), "RMS:%d P:%d", mic_rms, mic_peak);
+        }
+      else
+        {
+          snprintf(line, sizeof(line), "-- (AUDIO)");
+        }
       hs_lcd_text(&lcd, value_x, y + 1, line, 0x07ff, 2);
       y += 20;
 
@@ -1409,10 +1469,8 @@ out:
     }
 
   hs_buttons_close(&buttons);
-  if (imu_fd >= 0)
-    {
-      close(imu_fd);
-    }
+  hs_imu_close(&imu);
+  hs_mic_close(&mic);
   hs_gsr_close(&gsr);
   hs_vibration_close(&vibration);
   hs_adc_close(&adc);
