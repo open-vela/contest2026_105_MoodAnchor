@@ -16,6 +16,7 @@
 #include <sys/ioctl.h>
 
 #include <nuttx/ioexpander/gpio.h>
+#include <nuttx/video/fb.h>
 
 #define HS_GSR_DEFAULT_CAL_SECONDS 30
 #define HS_GSR_MAX_CAL_SECONDS     600
@@ -1154,6 +1155,8 @@ static int hs_demo_sysinfo(void)
 {
   const int safe_x = 24;
   const int value_x = 64;
+  const int dynamic_y = 20;
+  const int dynamic_h = 400;
   struct hs_lcd_s lcd = { .fd = -1 };
   struct hs_i2c_s i2c0 = { .fd = -1 };
   struct hs_i2c_s i2c1 = { .fd = -1 };
@@ -1172,6 +1175,7 @@ static int hs_demo_sysinfo(void)
   int n0 = -1;
   int n1 = -1;
   int ret;
+  bool first_frame = true;
 
   ret = hs_lcd_open(&lcd, NULL);
   if (ret < 0)
@@ -1324,22 +1328,28 @@ static int hs_demo_sysinfo(void)
                           (unsigned long)(uintptr_t)&vbus);
         }
 
-      /* Clear the local framebuffer without flushing it.  The old code
-       * called hs_lcd_fill(), which itself flushed a full frame, then flushed
-       * again after drawing the labels; that doubled the visible refresh time. */
-      if (lcd.bpp == 16)
+      /* Clear the local framebuffer without flushing it.  Static labels are
+       * drawn on every pass for simplicity, but after the first pass only the
+       * numeric/value column is cleared and sent to the panel. */
+      if (first_frame)
         {
-          uint16_t *row = (uint16_t *)lcd.framebuffer;
-          uint16_t clear_y;
-          for (clear_y = 0; clear_y < lcd.yres; clear_y++)
-            {
-              memset(row, 0, (size_t)lcd.xres * sizeof(uint16_t));
-              row = (uint16_t *)((uint8_t *)row + lcd.stride);
-            }
+          memset(lcd.framebuffer, 0, lcd.length);
         }
       else
         {
-          memset(lcd.framebuffer, 0, lcd.length);
+          uint16_t clear_y;
+          size_t pixel_bytes = (size_t)lcd.bpp / 8;
+          size_t clear_offset = (size_t)value_x * pixel_bytes;
+          size_t clear_bytes = ((size_t)lcd.xres - value_x) * pixel_bytes;
+
+          for (clear_y = dynamic_y;
+               clear_y < dynamic_y + dynamic_h && clear_y < lcd.yres;
+               clear_y++)
+            {
+              uint8_t *row = (uint8_t *)lcd.framebuffer +
+                             (size_t)clear_y * lcd.stride;
+              memset(row + clear_offset, 0, clear_bytes);
+            }
         }
 
       /* Title */
@@ -1501,7 +1511,26 @@ static int hs_demo_sysinfo(void)
                      sizeof(g_cn_exit) / sizeof(g_cn_exit[0]), 0xf800, 1);
       y += 20;
 
-      hs_lcd_flush(&lcd);
+      if (first_frame)
+        {
+          hs_lcd_flush(&lcd);
+          first_frame = false;
+        }
+      else
+        {
+#if defined(FBIO_UPDATE) && defined(CONFIG_FB_UPDATE)
+          struct fb_area_s area;
+
+          area.x = value_x;
+          area.y = dynamic_y;
+          area.w = lcd.xres - value_x;
+          area.h = dynamic_h;
+          (void)ioctl(lcd.fd, FBIO_UPDATE,
+                      (unsigned long)(uintptr_t)&area);
+#else
+          hs_lcd_flush(&lcd);
+#endif
+        }
       tick++;
       usleep(200000);
     }
