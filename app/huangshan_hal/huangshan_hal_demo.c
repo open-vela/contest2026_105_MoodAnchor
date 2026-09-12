@@ -413,13 +413,15 @@ static void hs_i2c_format(char *buf, size_t size, const uint8_t *found,
 
 static void hs_demo_help(void)
 {
-  printf("huangshan_hal_demo <all|i2c|adc|power|pwm|vibration|imu|lcd|lcdtest|ble|ble_adv|sysinfo|gsr_once|gsr_cal|gsr_stream>\n");
+  printf("huangshan_hal_demo <all|i2c|adc|power|pwm|vibration|imu|mic_once|mic_stream|lcd|lcdtest|ble|ble_adv|sysinfo|gsr_once|gsr_cal|gsr_stream>\n");
   printf("  i2c: probe FT6146 at I2C1 address 0x38\n");
   printf("  adc: read the VBAT ADC channel (channel 5)\n");
   printf("  power: print USB, VBAT, charger registers and KEY2 once\n");
   printf("  pwm: output 1 kHz, 50%% on /dev/pwm0 for 2 seconds\n");
-  printf("  vibration [on|off]: drive PA30 high/low for the vibration module\n");
+  printf("  vibration [on|off]: drive PA42 high/low for the vibration module\n");
   printf("  imu: read one LSM6DSL accelerometer/gyroscope sample\n");
+  printf("  mic_once: read one PCM block from the board MEMS microphone\n");
+  printf("  mic_stream: print microphone RMS/peak at about 20 Hz\n");
   printf("  lcd: fill the CO5300 framebuffer with blue\n");
   printf("  lcdtest: LCD color bars, checkerboard and text (Ctrl+C to exit)\n");
   printf("  ble: open HCI transport and issue HCI Reset\n");
@@ -457,6 +459,98 @@ static int hs_demo_imu(void)
     }
 
   hs_imu_close(&imu);
+  return ret;
+}
+
+static int hs_demo_mic_once(void)
+{
+  struct hs_mic_s mic = { .fd = -1 };
+  int16_t samples[128];
+  ssize_t count;
+  int ret;
+
+  ret = hs_mic_open(&mic, 16000);
+  if (ret < 0)
+    {
+      printf("mic: %s unavailable (%d); enable AUDCODEC PCM backend\n",
+             HS_MIC_DEVICE, ret);
+      return ret;
+    }
+
+  count = hs_mic_read(&mic, samples, sizeof(samples) / sizeof(samples[0]));
+  if (count < 0)
+    {
+      ret = -errno;
+      printf("mic: read failed (%d)\n", ret);
+    }
+  else
+    {
+      int i;
+      int32_t sum = 0;
+      int16_t peak = 0;
+      for (i = 0; i < count; i++)
+        {
+          int16_t value = samples[i] < 0 ? -samples[i] : samples[i];
+          sum += value;
+          if (value > peak) peak = value;
+        }
+      printf("mic: samples=%ld avg_abs=%ld peak=%d rate=%lu\n",
+             (long)count, count > 0 ? (long)(sum / count) : 0L,
+             peak, (unsigned long)mic.sample_rate);
+      ret = 0;
+    }
+  hs_mic_close(&mic);
+  return ret;
+}
+
+static int hs_demo_mic_stream(void)
+{
+  struct hs_mic_s mic = { .fd = -1 };
+  int16_t samples[160];
+  int ret;
+
+  ret = hs_mic_open(&mic, 16000);
+  if (ret < 0)
+    {
+      printf("mic_stream: %s unavailable (%d); enable AUDCODEC PCM backend\n",
+             HS_MIC_DEVICE, ret);
+      return ret;
+    }
+  printf("time_ms,avg_abs,peak\n");
+  for (;;)
+    {
+      ssize_t count = hs_mic_read(&mic, samples,
+                                  sizeof(samples) / sizeof(samples[0]));
+      if (count < 0)
+        {
+          if (errno == EAGAIN)
+            {
+              usleep(50000);
+              continue;
+            }
+          ret = -errno;
+          break;
+        }
+      if (count > 0)
+        {
+          int i;
+          int32_t sum = 0;
+          int16_t peak = 0;
+          struct timespec ts;
+          for (i = 0; i < count; i++)
+            {
+              int16_t value = samples[i] < 0 ? -samples[i] : samples[i];
+              sum += value;
+              if (value > peak) peak = value;
+            }
+          clock_gettime(CLOCK_MONOTONIC, &ts);
+          printf("%lld,%ld,%d\n",
+                 (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000,
+                 (long)(sum / count), peak);
+        }
+      usleep(50000);
+    }
+  hs_mic_close(&mic);
   return ret;
 }
 
@@ -813,7 +907,7 @@ static int hs_demo_vibration(const char *mode)
   if (ret >= 0)
     {
       ret = hs_vibration_set(&vibration, enabled);
-      printf("vibration: PA30=%d (%s)\n", enabled ? 1 : 0,
+      printf("vibration: PA42=%d (%s)\n", enabled ? 1 : 0,
              ret < 0 ? "failed" : "ok");
     }
   else
@@ -1174,7 +1268,7 @@ static int hs_demo_sysinfo(void)
       hs_lcd_text(&lcd, value_x, y + 1, line, 0xf81f, 2);
       y += 20;
 
-      hs_lcd_text(&lcd, safe_x, y, "VIB PA30:", 0xf81f, 2);
+      hs_lcd_text(&lcd, safe_x, y, "VIB PA42:", 0xf81f, 2);
       snprintf(line, sizeof(line), " %s", hs_vibration_is_enabled(&vibration)
                ? "ON" : "OFF");
       hs_lcd_text(&lcd, value_x, y + 1, line, 0xf81f, 2);
@@ -1285,6 +1379,14 @@ int huangshan_hal_demo_main(int argc, char *argv[])
   if (strcmp(name, "imu") == 0)
     {
       return hs_demo_imu();
+    }
+  if (strcmp(name, "mic_once") == 0)
+    {
+      return hs_demo_mic_once();
+    }
+  if (strcmp(name, "mic_stream") == 0)
+    {
+      return hs_demo_mic_stream();
     }
   if (strcmp(name, "lcd") == 0)
     {

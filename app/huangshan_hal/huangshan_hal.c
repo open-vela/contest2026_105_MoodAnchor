@@ -385,6 +385,54 @@ int hs_imu_read(struct hs_imu_s *imu, struct hs_imu_sample_s *sample)
   return 0;
 }
 
+int hs_mic_open(struct hs_mic_s *mic, uint32_t sample_rate)
+{
+  if (mic == NULL || sample_rate == 0)
+    {
+      return -EINVAL;
+    }
+
+  mic->fd = open(HS_MIC_DEVICE, O_RDONLY | O_NONBLOCK);
+  if (mic->fd < 0)
+    {
+      mic->fd = -1;
+      return -errno;
+    }
+
+  mic->sample_rate = sample_rate;
+  mic->channels = 1;
+  return 0;
+}
+
+void hs_mic_close(struct hs_mic_s *mic)
+{
+  if (mic != NULL && mic->fd >= 0)
+    {
+      close(mic->fd);
+      mic->fd = -1;
+    }
+}
+
+ssize_t hs_mic_read(struct hs_mic_s *mic, int16_t *samples,
+                    size_t sample_count)
+{
+  ssize_t bytes;
+
+  if (mic == NULL || samples == NULL || sample_count == 0 || mic->fd < 0)
+    {
+      errno = EINVAL;
+      return -1;
+    }
+
+  bytes = read(mic->fd, samples, sample_count * sizeof(int16_t));
+  if (bytes < 0)
+    {
+      return -1;
+    }
+
+  return bytes / (ssize_t)sizeof(int16_t);
+}
+
 int hs_buttons_open(struct hs_buttons_s *buttons, const char *devpath)
 {
   btn_buttonset_t supported = 0;

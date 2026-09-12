@@ -33,6 +33,10 @@ extern "C"
 #define HS_LCD_DEVICE            "/dev/fb0"
 #define HS_BLE_DEVICE            "/dev/ttyHCI0"
 #define HS_IMU_DEVICE            "/dev/lsm6dsl0"
+/* NuttX audio capture endpoint used when the SF32LB52 AUDCODEC backend is
+ * enabled.  The board's MEMS microphone is analog (MIC_BIAS/MIC_ADC_IN), so
+ * it must be exposed by the audio driver as PCM; it is not a GPADC channel. */
+#define HS_MIC_DEVICE            "/dev/audio/pcm0c"
 
 struct hs_i2c_s
 {
@@ -108,6 +112,21 @@ int hs_imu_open(struct hs_imu_s *imu);
 void hs_imu_close(struct hs_imu_s *imu);
 int hs_imu_read(struct hs_imu_s *imu, struct hs_imu_sample_s *sample);
 
+/* Board microphone PCM capture.  Samples are signed 16-bit mono PCM.  The
+ * endpoint is intentionally kept as a standard file descriptor so upper
+ * layers can consume samples without depending on SiFli HAL ABI details. */
+struct hs_mic_s
+{
+  int fd;
+  uint32_t sample_rate;
+  uint8_t channels;
+};
+
+int hs_mic_open(struct hs_mic_s *mic, uint32_t sample_rate);
+void hs_mic_close(struct hs_mic_s *mic);
+ssize_t hs_mic_read(struct hs_mic_s *mic, int16_t *samples,
+                    size_t sample_count);
+
 struct hs_buttons_s
 {
   int fd;
@@ -118,8 +137,10 @@ int hs_buttons_open(struct hs_buttons_s *buttons, const char *devpath);
 void hs_buttons_close(struct hs_buttons_s *buttons);
 int hs_buttons_read(struct hs_buttons_s *buttons, uint32_t *state);
 
-/* PA30 vibration control output.  Drive a transistor/MOSFET input or a
- * vibration-driver EN pin; do not connect a bare motor directly to PA30. */
+/* PA42 vibration control output (exported as /dev/gpio3).  PA30 is reserved
+ * for the LSM6DSL sensor LDO and must not be driven by the vibration path.
+ * Drive a transistor/MOSFET input or a vibration-driver EN pin; do not
+ * connect a bare motor directly to a GPIO. */
 struct hs_vibration_s
 {
   int fd;

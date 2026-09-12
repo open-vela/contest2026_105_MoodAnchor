@@ -8,9 +8,26 @@
 | I2C | `/dev/i2c0`、`/dev/i2c1` | `hs_i2c_open/write/read/write_read` |
 | ADC | `/dev/adc0`（VBAT）、`/dev/adc1`（GSR/PA28） | `hs_adc_open/read`、`hs_gsr_open/read` |
 | PWM | `/dev/pwm0` | `hs_pwm_open/set/stop` |
-| 震动输出 | `/dev/gpio3`（PA30） | `hs_vibration_open/set/close` |
+| 震动输出 | `/dev/gpio3`（PA42） | `hs_vibration_open/set/close` |
 | LCD | `/dev/fb0` | `hs_lcd_open/fill/pixel/flush` |
 | BLE H:4 | `/dev/ttyHCI0` | `hs_ble_open/reset/command` |
+| 板载麦克风 | `/dev/audio/pcm0c`（需 AUDCODEC 音频后端） | `hs_mic_open/read/close` |
+
+## IMU 和麦克风
+
+`hs_imu_open/read/close` 使用官方 `/dev/lsm6dsl0` 驱动，返回加速度（mg）、
+角速度（mdps）、温度和时间戳。命令行可用：
+
+```text
+nsh> huangshan_hal_demo imu
+```
+
+黄山派的麦克风是模拟 MEMS MIC，信号走芯片内部 AUDCODEC ADC（模组 36 脚
+`MIC_BIAS`、37 脚 `MIC_ADC_IN`），不是 Grove/GPADC 通道，也没有从 30P
+排针引出。`hs_mic_*` 接口和 `mic_once`/`mic_stream` 命令已经提供标准
+16-bit 单声道 PCM 入口；当前裁剪版 defconfig 尚未启用 AUDCODEC 音频设备，
+因此命令会明确返回 `ENODEV`，不会伪造麦克风数据或修改现有 ADC/GSR 通路。
+启用板级 AUDCODEC DMA/PCM 注册后，上层无需改变接口。
 
 BLE 只提供 H:4 HCI 传输接口；GAP/GATT 应由 openvela 的 Bluetooth Host 或
 framework service 管理。启用 `LVX_USE_HUANGSHAN_HAL` 会同时选择
@@ -108,7 +125,8 @@ hs_gsr_close(&gsr);
 
 ## 震动模块和 KEY2
 
-PA30 作为普通推挽输出，注册为 `/dev/gpio3`。`hs_vibration_set(..., true)`
+PA42 作为普通推挽输出，注册为 `/dev/gpio3`。PA30 保留给 LSM6DSL 传感器 LDO，
+不得用于震动控制。`hs_vibration_set(..., true)`
 输出高电平，`false` 输出低电平。板载 KEY2（PA43）在开机自动运行的
 `sysinfo` 面板中按一下开启震动，再按一下关闭震动；也可以在串口单独测试：
 
@@ -117,7 +135,7 @@ nsh> huangshan_hal_demo vibration on
 nsh> huangshan_hal_demo vibration off
 ```
 
-PA30 只能作为逻辑控制信号。若使用裸偏心马达，必须经过三极管或 MOSFET
+PA42 只能作为逻辑控制信号。若使用裸偏心马达，必须经过三极管或 MOSFET
 驱动，并加续流二极管，不能把马达线圈直接接到 MCU GPIO。
 
 接线前先完全断开 USB 与电池：Grove 红线接板底 `3V` 测试焊盘 TP3
