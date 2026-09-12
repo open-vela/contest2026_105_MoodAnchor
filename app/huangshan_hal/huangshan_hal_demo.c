@@ -19,13 +19,6 @@
 #define HS_GSR_DEFAULT_CAL_SECONDS 30
 #define HS_GSR_MAX_CAL_SECONDS     600
 #define HS_GSR_WARMUP_SAMPLES      5
-#define HS_GSR_RAW10_MAX           1023
-
-struct hs_gsr_sample_s
-{
-  int32_t adc_mv;
-  uint16_t raw10;
-};
 
 /* ------------------------------------------------------------------------
  * Minimal built-in 5x7 bitmap font (row bit4..bit0 = left..right pixels)
@@ -435,49 +428,16 @@ static void hs_demo_help(void)
   printf("  gsr_stream <CAL_RAW10>: CSV at about 5 Hz; Ctrl+C to exit\n");
 }
 
-static uint16_t hs_gsr_mv_to_raw10(int32_t adc_mv)
-{
-  if (adc_mv <= 0)
-    {
-      return 0;
-    }
-
-  if (adc_mv >= 3300)
-    {
-      return HS_GSR_RAW10_MAX;
-    }
-
-  return (uint16_t)(((int64_t)adc_mv * HS_GSR_RAW10_MAX + 1650) / 3300);
-}
-
-static int hs_gsr_read(struct hs_adc_s *adc, struct hs_gsr_sample_s *sample)
-{
-  int ret;
-
-  if (adc == NULL || sample == NULL)
-    {
-      return -EINVAL;
-    }
-
-  ret = hs_adc_read(adc, HS_ADC_GSR_CHANNEL, &sample->adc_mv);
-  if (ret >= 0)
-    {
-      sample->raw10 = hs_gsr_mv_to_raw10(sample->adc_mv);
-    }
-
-  return ret;
-}
-
 static int hs_demo_gsr_once(void)
 {
-  struct hs_adc_s adc = { .fd = -1 };
+  struct hs_gsr_s gsr = { .adc = { .fd = -1 } };
   struct hs_gsr_sample_s sample;
   int ret;
 
-  ret = hs_adc_open(&adc, HS_ADC_GSR_DEVICE);
+  ret = hs_gsr_open(&gsr);
   if (ret >= 0)
     {
-      ret = hs_gsr_read(&adc, &sample);
+      ret = hs_gsr_read(&gsr, &sample);
     }
 
   if (ret < 0)
@@ -490,13 +450,13 @@ static int hs_demo_gsr_once(void)
              sample.raw10);
     }
 
-  hs_adc_close(&adc);
+  hs_gsr_close(&gsr);
   return ret;
 }
 
 static int hs_demo_gsr_cal(int seconds)
 {
-  struct hs_adc_s adc = { .fd = -1 };
+  struct hs_gsr_s gsr = { .adc = { .fd = -1 } };
   struct hs_gsr_sample_s sample;
   int64_t total = 0;
   int samples = 0;
@@ -510,7 +470,7 @@ static int hs_demo_gsr_cal(int seconds)
     }
 
   target = seconds * 5;
-  ret = hs_adc_open(&adc, HS_ADC_GSR_DEVICE);
+  ret = hs_gsr_open(&gsr);
   if (ret < 0)
     {
       printf("gsr_cal: cannot open /dev/adc1 (%d)\n", ret);
@@ -522,7 +482,7 @@ static int hs_demo_gsr_cal(int seconds)
 
   while (samples < target)
     {
-      ret = hs_gsr_read(&adc, &sample);
+      ret = hs_gsr_read(&gsr, &sample);
       if (ret < 0)
         {
           break;
@@ -537,7 +497,7 @@ static int hs_demo_gsr_cal(int seconds)
         }
     }
 
-  hs_adc_close(&adc);
+  hs_gsr_close(&gsr);
   if (ret < 0)
     {
       printf("gsr_cal: failed (%d)\n", ret);
@@ -582,7 +542,7 @@ static const char *hs_gsr_status(uint16_t cal_raw10, uint16_t raw10,
 
 static int hs_demo_gsr_stream(uint16_t cal_raw10)
 {
-  struct hs_adc_s adc = { .fd = -1 };
+  struct hs_gsr_s gsr = { .adc = { .fd = -1 } };
   struct hs_gsr_sample_s sample;
   struct timespec ts;
   int32_t ema_mv = 0;
@@ -596,7 +556,7 @@ static int hs_demo_gsr_stream(uint16_t cal_raw10)
       return -EINVAL;
     }
 
-  ret = hs_adc_open(&adc, HS_ADC_GSR_DEVICE);
+  ret = hs_gsr_open(&gsr);
   if (ret < 0)
     {
       printf("gsr_stream: cannot open /dev/adc1 (%d)\n", ret);
@@ -610,7 +570,7 @@ static int hs_demo_gsr_stream(uint16_t cal_raw10)
       int64_t resistance = -1;
       int32_t delta_pct = 0;
 
-      ret = hs_gsr_read(&adc, &sample);
+      ret = hs_gsr_read(&gsr, &sample);
       if (ret < 0)
         {
           break;
@@ -656,7 +616,7 @@ static int hs_demo_gsr_stream(uint16_t cal_raw10)
       count++;
     }
 
-  hs_adc_close(&adc);
+  hs_gsr_close(&gsr);
   printf("gsr_stream: stopped (%d)\n", ret);
   return ret;
 }
@@ -964,7 +924,7 @@ static int hs_demo_sysinfo(void)
   struct hs_i2c_s i2c0 = { .fd = -1 };
   struct hs_i2c_s i2c1 = { .fd = -1 };
   struct hs_adc_s adc = { .fd = -1 };
-  struct hs_adc_s gsr_adc = { .fd = -1 };
+  struct hs_gsr_s gsr = { .adc = { .fd = -1 } };
   struct hs_buttons_s buttons = { .fd = -1 };
   int vbus_fd = -1;
   int imu_fd = -1;
@@ -988,7 +948,7 @@ static int hs_demo_sysinfo(void)
   hs_adc_open(&adc, NULL);
   /* GSR is optional.  Keep the panel useful when the Grove module is not
    * connected or /dev/adc1 is unavailable. */
-  hs_adc_open(&gsr_adc, HS_ADC_GSR_DEVICE);
+  hs_gsr_open(&gsr);
   hs_buttons_open(&buttons, NULL);
   vbus_fd = open("/dev/gpio1", O_RDONLY);
   imu_fd = open("/dev/lsm6dsl0", O_RDONLY);
@@ -1022,9 +982,9 @@ static int hs_demo_sysinfo(void)
           hs_adc_read(&adc, HS_ADC_VBAT_CHANNEL, &adcval);
         }
 
-      if (gsr_adc.fd >= 0)
+      if (gsr.adc.fd >= 0)
         {
-          gsrret = hs_gsr_read(&gsr_adc, &gsr_sample);
+          gsrret = hs_gsr_read(&gsr, &gsr_sample);
         }
 
       if (buttons.fd >= 0)
@@ -1162,7 +1122,7 @@ static int hs_demo_sysinfo(void)
                      sizeof(g_cn_imu) / sizeof(g_cn_imu[0]), 0x07ff, 1);
       snprintf(line, sizeof(line), " %u  ADC1:%u",
                imu_fd >= 0 ? 1u : 0u,
-               gsr_adc.fd >= 0 ? 1u : 0u);
+               gsr.adc.fd >= 0 ? 1u : 0u);
       hs_lcd_text(&lcd, value_x, y + 1, line, 0x07ff, 2);
       y += 20;
 
@@ -1194,7 +1154,7 @@ out:
     {
       close(imu_fd);
     }
-  hs_adc_close(&gsr_adc);
+  hs_gsr_close(&gsr);
   hs_adc_close(&adc);
   hs_i2c_close(&i2c0);
   hs_i2c_close(&i2c1);

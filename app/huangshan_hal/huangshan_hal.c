@@ -253,6 +253,63 @@ int hs_adc_read(struct hs_adc_s *adc, uint8_t channel, int32_t *value)
   return -ENODATA;
 }
 
+static uint16_t hs_gsr_mv_to_raw10(int32_t adc_mv)
+{
+  if (adc_mv <= 0)
+    {
+      return 0;
+    }
+
+  if (adc_mv >= 3300)
+    {
+      return HS_GSR_RAW10_MAX;
+    }
+
+  return (uint16_t)(((int64_t)adc_mv * HS_GSR_RAW10_MAX + 1650) / 3300);
+}
+
+int hs_gsr_open(struct hs_gsr_s *gsr)
+{
+  int ret;
+
+  if (gsr == NULL)
+    {
+      return -EINVAL;
+    }
+
+  memset(gsr, 0, sizeof(*gsr));
+  gsr->adc.fd = -1;
+  ret = hs_adc_open(&gsr->adc, HS_ADC_GSR_DEVICE);
+  return ret;
+}
+
+void hs_gsr_close(struct hs_gsr_s *gsr)
+{
+  if (gsr != NULL)
+    {
+      hs_adc_close(&gsr->adc);
+    }
+}
+
+int hs_gsr_read(struct hs_gsr_s *gsr, struct hs_gsr_sample_s *sample)
+{
+  int ret;
+  if (gsr == NULL || sample == NULL || gsr->adc.fd < 0)
+    {
+      return -EINVAL;
+    }
+
+  memset(sample, 0, sizeof(*sample));
+  ret = hs_adc_read(&gsr->adc, HS_ADC_GSR_CHANNEL, &sample->adc_mv);
+  if (ret < 0)
+    {
+      return ret;
+    }
+
+  sample->raw10 = hs_gsr_mv_to_raw10(sample->adc_mv);
+  return 0;
+}
+
 int hs_buttons_open(struct hs_buttons_s *buttons, const char *devpath)
 {
   btn_buttonset_t supported = 0;

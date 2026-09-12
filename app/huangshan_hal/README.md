@@ -6,7 +6,7 @@
 | 模块 | 默认节点 | 公开接口 |
 |---|---|---|
 | I2C | `/dev/i2c0`、`/dev/i2c1` | `hs_i2c_open/write/read/write_read` |
-| ADC | `/dev/adc0`（VBAT）、`/dev/adc1`（GSR/PA28） | `hs_adc_open/read` |
+| ADC | `/dev/adc0`（VBAT）、`/dev/adc1`（GSR/PA28） | `hs_adc_open/read`、`hs_gsr_open/read` |
 | PWM | `/dev/pwm0` | `hs_pwm_open/set/stop` |
 | LCD | `/dev/fb0` | `hs_lcd_open/fill/pixel/flush` |
 | BLE H:4 | `/dev/ttyHCI0` | `hs_ble_open/reset/command` |
@@ -75,6 +75,35 @@ time_ms,adc_mv,raw10,ema_mv,resistance_ohm,delta_pct,status
 `gsr_cal` 时保持电极悬空并调节 Grove 板电位器；`gsr_stream` 约 5 Hz 连续
 输出 CSV，Ctrl+C 停止。`status` 为 `WARMUP`、`OK`、`SATURATED` 或
 `CAL_INVALID`。人体电阻和趋势仅供原型调试，不能作为医疗或情绪结论。
+
+### 给上层应用的读取接口
+
+上层只需要请求采样数据时，使用 `hs_gsr_s` 的同步接口即可。每个调用者
+独立打开/关闭设备，`hs_gsr_read()` 每次触发一次 ADC 转换并返回输入电压和
+归一化的 10 位原始值；接口不会创建后台线程，也不保存校准或情绪判断状态。
+
+```c
+#include "huangshan_hal.h"
+
+struct hs_gsr_s gsr;
+struct hs_gsr_sample_s sample;
+int ret = hs_gsr_open(&gsr);
+if (ret == 0)
+  {
+    ret = hs_gsr_read(&gsr, &sample);
+    if (ret == 0)
+      {
+        /* sample.adc_mv: millivolts, sample.raw10: 0..1023 */
+        printf("GSR %ld mV (raw=%u)\\n", (long)sample.adc_mv,
+               sample.raw10);
+    }
+  }
+hs_gsr_close(&gsr);
+```
+
+采样周期、滤波、校准和上层业务含义由调用者自行决定。`hs_gsr_read()` 返回
+负的 `errno`（如 `-ENODEV`、`-EIO`、`-EINVAL`）；未连接传感器时不会阻塞
+系统，可直接按错误处理。
 
 接线前先完全断开 USB 与电池：Grove 红线接板底 `3V` 测试焊盘 TP3
 (`VCC_3V3_S`)，黑线接 TP6 或 TP7 (`GND`)，黄线经 1 kΩ 串联电阻接 30P

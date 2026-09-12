@@ -58,6 +58,28 @@ int hs_adc_open(struct hs_adc_s *adc, const char *devpath);
 void hs_adc_close(struct hs_adc_s *adc);
 int hs_adc_read(struct hs_adc_s *adc, uint8_t channel, int32_t *value);
 
+/* Grove GSR/皮电 interface.  This is a small, synchronous API intended for
+ * application code; it does not create a sampling thread or claim the ADC
+ * device globally.  A caller owns one hs_gsr_s instance and requests samples
+ * from its own worker/task.  Values are engineering/debug estimates only,
+ * not medical measurements or emotion diagnoses. */
+#define HS_GSR_RAW10_MAX 1023u
+
+struct hs_gsr_sample_s
+{
+  int32_t adc_mv;             /* ADC input voltage, millivolts */
+  uint16_t raw10;             /* normalized 0..1023 reading */
+};
+
+struct hs_gsr_s
+{
+  struct hs_adc_s adc;
+};
+
+int hs_gsr_open(struct hs_gsr_s *gsr);
+void hs_gsr_close(struct hs_gsr_s *gsr);
+int hs_gsr_read(struct hs_gsr_s *gsr, struct hs_gsr_sample_s *sample);
+
 struct hs_buttons_s
 {
   int fd;
