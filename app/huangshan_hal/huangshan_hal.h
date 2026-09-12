@@ -28,6 +28,7 @@ extern "C"
 #define HS_ADC_VBAT_CHANNEL      5
 #define HS_ADC_GSR_CHANNEL       0
 #define HS_BUTTONS_DEVICE        "/dev/buttons"
+#define HS_VIBRATION_DEVICE      "/dev/gpio3"
 #define HS_PWM_DEVICE            "/dev/pwm0"
 #define HS_LCD_DEVICE            "/dev/fb0"
 #define HS_BLE_DEVICE            "/dev/ttyHCI0"
@@ -89,6 +90,19 @@ struct hs_buttons_s
 int hs_buttons_open(struct hs_buttons_s *buttons, const char *devpath);
 void hs_buttons_close(struct hs_buttons_s *buttons);
 int hs_buttons_read(struct hs_buttons_s *buttons, uint32_t *state);
+
+/* PA30 vibration control output.  Drive a transistor/MOSFET input or a
+ * vibration-driver EN pin; do not connect a bare motor directly to PA30. */
+struct hs_vibration_s
+{
+  int fd;
+  bool enabled;
+};
+
+int hs_vibration_open(struct hs_vibration_s *vibration);
+void hs_vibration_close(struct hs_vibration_s *vibration);
+int hs_vibration_set(struct hs_vibration_s *vibration, bool enabled);
+bool hs_vibration_is_enabled(const struct hs_vibration_s *vibration);
 
 struct hs_pwm_s
 {

@@ -413,11 +413,12 @@ static void hs_i2c_format(char *buf, size_t size, const uint8_t *found,
 
 static void hs_demo_help(void)
 {
-  printf("huangshan_hal_demo <all|i2c|adc|power|pwm|lcd|lcdtest|ble|ble_adv|sysinfo|gsr_once|gsr_cal|gsr_stream>\n");
+  printf("huangshan_hal_demo <all|i2c|adc|power|pwm|vibration|lcd|lcdtest|ble|ble_adv|sysinfo|gsr_once|gsr_cal|gsr_stream>\n");
   printf("  i2c: probe FT6146 at I2C1 address 0x38\n");
   printf("  adc: read the VBAT ADC channel (channel 5)\n");
   printf("  power: print USB, VBAT, charger registers and KEY2 once\n");
   printf("  pwm: output 1 kHz, 50%% on /dev/pwm0 for 2 seconds\n");
+  printf("  vibration [on|off]: drive PA30 high/low for the vibration module\n");
   printf("  lcd: fill the CO5300 framebuffer with blue\n");
   printf("  lcdtest: LCD color bars, checkerboard and text (Ctrl+C to exit)\n");
   printf("  ble: open HCI transport and issue HCI Reset\n");
@@ -763,6 +764,36 @@ static int hs_demo_pwm(void)
   return ret;
 }
 
+static int hs_demo_vibration(const char *mode)
+{
+  struct hs_vibration_s vibration = { .fd = -1 };
+  bool enabled;
+  int ret;
+
+  if (mode == NULL || (strcmp(mode, "on") != 0 &&
+                       strcmp(mode, "off") != 0))
+    {
+      printf("vibration: usage vibration on|off\n");
+      return -EINVAL;
+    }
+
+  enabled = strcmp(mode, "on") == 0;
+  ret = hs_vibration_open(&vibration);
+  if (ret >= 0)
+    {
+      ret = hs_vibration_set(&vibration, enabled);
+      printf("vibration: PA30=%d (%s)\n", enabled ? 1 : 0,
+             ret < 0 ? "failed" : "ok");
+    }
+  else
+    {
+      printf("vibration: open %s failed (%d)\n", HS_VIBRATION_DEVICE, ret);
+    }
+
+  hs_vibration_close(&vibration);
+  return ret;
+}
+
 static int hs_demo_lcd(void)
 {
   struct hs_lcd_s lcd = { .fd = -1 };
@@ -926,6 +957,7 @@ static int hs_demo_sysinfo(void)
   struct hs_adc_s adc = { .fd = -1 };
   struct hs_gsr_s gsr = { .adc = { .fd = -1 } };
   struct hs_buttons_s buttons = { .fd = -1 };
+  struct hs_vibration_s vibration = { .fd = -1 };
   int vbus_fd = -1;
   int imu_fd = -1;
   uint8_t found0[16];
@@ -950,10 +982,13 @@ static int hs_demo_sysinfo(void)
    * connected or /dev/adc1 is unavailable. */
   hs_gsr_open(&gsr);
   hs_buttons_open(&buttons, NULL);
+  hs_vibration_open(&vibration);
   vbus_fd = open("/dev/gpio1", O_RDONLY);
   imu_fd = open("/dev/lsm6dsl0", O_RDONLY);
 
   printf("sysinfo panel on, press Ctrl+C to exit\n");
+
+  bool key2_pressed = false;
 
   while (1)
     {
@@ -962,6 +997,7 @@ static int hs_demo_sysinfo(void)
       struct hs_gsr_sample_s gsr_sample;
       int gsrret = -ENODEV;
       uint32_t button_state = 0;
+      int button_ret;
       uint8_t reg = 0;
       uint8_t touch = 0;
       uint8_t chg01 = 0;
@@ -987,9 +1023,24 @@ static int hs_demo_sysinfo(void)
           gsrret = hs_gsr_read(&gsr, &gsr_sample);
         }
 
+      button_ret = -ENODEV;
       if (buttons.fd >= 0)
         {
-          hs_buttons_read(&buttons, &button_state);
+          button_ret = hs_buttons_read(&buttons, &button_state);
+          if (button_ret >= 0)
+            {
+              bool pressed = (button_state & 1u) != 0;
+              if (pressed && !key2_pressed && vibration.fd >= 0)
+                {
+                  int vibret = hs_vibration_set(
+                    &vibration, !hs_vibration_is_enabled(&vibration));
+                  printf("KEY2: vibration %s (%d)\n",
+                         hs_vibration_is_enabled(&vibration) ? "on" : "off",
+                         vibret);
+                }
+
+              key2_pressed = pressed;
+            }
         }
 
       if (i2c0.fd >= 0)
@@ -1092,6 +1143,12 @@ static int hs_demo_sysinfo(void)
       hs_lcd_text(&lcd, value_x, y + 1, line, 0xf81f, 2);
       y += 20;
 
+      hs_lcd_text(&lcd, safe_x, y, "VIB PA30:", 0xf81f, 2);
+      snprintf(line, sizeof(line), " %s", hs_vibration_is_enabled(&vibration)
+               ? "ON" : "OFF");
+      hs_lcd_text(&lcd, value_x, y + 1, line, 0xf81f, 2);
+      y += 20;
+
       hs_lcd_cn_text(&lcd, safe_x, y, g_cn_usb,
                      sizeof(g_cn_usb) / sizeof(g_cn_usb[0]), 0xff80, 1);
       hs_lcd_cn_text(&lcd, value_x, y, g_cn_charge,
@@ -1155,6 +1212,7 @@ out:
       close(imu_fd);
     }
   hs_gsr_close(&gsr);
+  hs_vibration_close(&vibration);
   hs_adc_close(&adc);
   hs_i2c_close(&i2c0);
   hs_i2c_close(&i2c1);
@@ -1188,6 +1246,10 @@ int huangshan_hal_demo_main(int argc, char *argv[])
   if (strcmp(name, "pwm") == 0)
     {
       return hs_demo_pwm();
+    }
+  if (strcmp(name, "vibration") == 0)
+    {
+      return hs_demo_vibration(argc > 2 ? argv[2] : NULL);
     }
   if (strcmp(name, "lcd") == 0)
     {

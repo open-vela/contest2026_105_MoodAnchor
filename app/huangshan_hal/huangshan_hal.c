@@ -16,6 +16,7 @@
 #include <nuttx/analog/ioctl.h>
 #include <nuttx/i2c/i2c_master.h>
 #include <nuttx/input/buttons.h>
+#include <nuttx/ioexpander/gpio.h>
 #include <nuttx/timers/pwm.h>
 #include <nuttx/video/fb.h>
 
@@ -373,6 +374,69 @@ int hs_buttons_read(struct hs_buttons_s *buttons, uint32_t *state)
 
   *state = (uint32_t)sample;
   return 0;
+}
+
+int hs_vibration_open(struct hs_vibration_s *vibration)
+{
+  if (vibration == NULL)
+    {
+      return -EINVAL;
+    }
+
+  vibration->fd = open(HS_VIBRATION_DEVICE, O_RDWR);
+  vibration->enabled = false;
+  if (vibration->fd < 0)
+    {
+      vibration->fd = -1;
+      return -errno;
+    }
+
+  /* Leave the output in the safe low state after opening. */
+  if (ioctl(vibration->fd, GPIOC_WRITE, 0) < 0)
+    {
+      int err = errno;
+      close(vibration->fd);
+      vibration->fd = -1;
+      return -err;
+    }
+
+  return 0;
+}
+
+void hs_vibration_close(struct hs_vibration_s *vibration)
+{
+  if (vibration != NULL)
+    {
+      if (vibration->fd >= 0)
+        {
+          (void)ioctl(vibration->fd, GPIOC_WRITE, 0);
+          close(vibration->fd);
+          vibration->fd = -1;
+        }
+
+      vibration->enabled = false;
+    }
+}
+
+int hs_vibration_set(struct hs_vibration_s *vibration, bool enabled)
+{
+  if (vibration == NULL || vibration->fd < 0)
+    {
+      return -EINVAL;
+    }
+
+  if (ioctl(vibration->fd, GPIOC_WRITE, enabled ? 1 : 0) < 0)
+    {
+      return -errno;
+    }
+
+  vibration->enabled = enabled;
+  return 0;
+}
+
+bool hs_vibration_is_enabled(const struct hs_vibration_s *vibration)
+{
+  return vibration != NULL && vibration->enabled;
 }
 
 int hs_pwm_open(struct hs_pwm_s *pwm, const char *devpath)

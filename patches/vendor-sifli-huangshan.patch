@@ -228,24 +228,27 @@ index 4a36786..5cae5e8 100644
 -vapp hap://app/com.application.lyra.demo &
 +huangshan_hal_demo sysinfo &
 diff --git a/boards/sf32lb52/lckfb_huangshan_pi/src/lckfb_huangshan_pi.h b/boards/sf32lb52/lckfb_huangshan_pi/src/lckfb_huangshan_pi.h
-index d779e47..8e5c81e 100644
+index d779e47..fbdcdc9 100644
 --- a/boards/sf32lb52/lckfb_huangshan_pi/src/lckfb_huangshan_pi.h
 +++ b/boards/sf32lb52/lckfb_huangshan_pi/src/lckfb_huangshan_pi.h
-@@ -26,11 +26,12 @@
+@@ -26,12 +26,14 @@
   ****************************************************************************/
  
  /* Number of GPIO pins */
 -#define BOARD_NGPIOIN     1
+-#define BOARD_NGPIOOUT    1
 +#define BOARD_NGPIOIN     2
- #define BOARD_NGPIOOUT    1
++#define BOARD_NGPIOOUT    2
  #define BOARD_NGPIOINT    1
  
  #define GPIO_IN1          (GET_PIN_2(hwp_gpio1, 34))
 +#define GPIO_IN2          (GET_PIN_2(hwp_gpio1, 44)) /* USB VBUS detect */
  #define GPIO_OUT1         (GET_PIN_2(hwp_gpio1, 26))
++#define GPIO_OUT2         (GET_PIN_2(hwp_gpio1, 30)) /* vibration control */
  
  #define GPIO_INT1         (GET_PIN_2(hwp_gpio1, 34))
-@@ -49,4 +50,3 @@ int sifli_gpio_initialize(void);
+ 
+@@ -49,4 +51,3 @@ int sifli_gpio_initialize(void);
  #endif
  
  #endif /* __VENDOR_SIFLI_BOARDS_SF32LB52_SF32LB52_DEVKIT_LCD_SF32LB52_DEVKIT_LCD_H */
@@ -278,7 +281,7 @@ index 89ae48e..11f245e 100644
  
  #ifdef CONFIG_DEV_GPIO
 diff --git a/boards/sf32lb52/lckfb_huangshan_pi/src/sifli_gpio.c b/boards/sf32lb52/lckfb_huangshan_pi/src/sifli_gpio.c
-index 3455074..cadadac 100644
+index 3455074..31d148c 100644
 --- a/boards/sf32lb52/lckfb_huangshan_pi/src/sifli_gpio.c
 +++ b/boards/sf32lb52/lckfb_huangshan_pi/src/sifli_gpio.c
 @@ -111,6 +111,7 @@ static const struct gpio_operations_s gpint_ops =
@@ -289,6 +292,14 @@ index 3455074..cadadac 100644
  };
  
  static struct sifli_gpio_dev_s g_gpin[BOARD_NGPIOIN];
+@@ -122,6 +123,7 @@ static struct sifli_gpio_dev_s g_gpin[BOARD_NGPIOIN];
+ static const uint32_t g_gpiooutputs[BOARD_NGPIOOUT] =
+ {
+   GPIO_OUT1,
++  GPIO_OUT2,
+ };
+ 
+ static struct sifli_gpio_dev_s g_gpout[BOARD_NGPIOOUT];
 diff --git a/chips/sf32lb52/Make.defs b/chips/sf32lb52/Make.defs
 index c4b6652..1a3335f 100644
 --- a/chips/sf32lb52/Make.defs
