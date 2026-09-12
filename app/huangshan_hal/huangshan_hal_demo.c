@@ -413,12 +413,13 @@ static void hs_i2c_format(char *buf, size_t size, const uint8_t *found,
 
 static void hs_demo_help(void)
 {
-  printf("huangshan_hal_demo <all|i2c|adc|power|pwm|vibration|lcd|lcdtest|ble|ble_adv|sysinfo|gsr_once|gsr_cal|gsr_stream>\n");
+  printf("huangshan_hal_demo <all|i2c|adc|power|pwm|vibration|imu|lcd|lcdtest|ble|ble_adv|sysinfo|gsr_once|gsr_cal|gsr_stream>\n");
   printf("  i2c: probe FT6146 at I2C1 address 0x38\n");
   printf("  adc: read the VBAT ADC channel (channel 5)\n");
   printf("  power: print USB, VBAT, charger registers and KEY2 once\n");
   printf("  pwm: output 1 kHz, 50%% on /dev/pwm0 for 2 seconds\n");
   printf("  vibration [on|off]: drive PA30 high/low for the vibration module\n");
+  printf("  imu: read one LSM6DSL accelerometer/gyroscope sample\n");
   printf("  lcd: fill the CO5300 framebuffer with blue\n");
   printf("  lcdtest: LCD color bars, checkerboard and text (Ctrl+C to exit)\n");
   printf("  ble: open HCI transport and issue HCI Reset\n");
@@ -427,6 +428,36 @@ static void hs_demo_help(void)
   printf("  gsr_once: read Grove GSR from PA28 (/dev/adc1) once\n");
   printf("  gsr_cal [seconds]: open-electrode calibration, default 30 seconds\n");
   printf("  gsr_stream <CAL_RAW10>: CSV at about 5 Hz; Ctrl+C to exit\n");
+}
+
+static int hs_demo_imu(void)
+{
+  struct hs_imu_s imu = { .fd = -1, .started = false };
+  struct hs_imu_sample_s sample;
+  int ret;
+
+  ret = hs_imu_open(&imu);
+  if (ret < 0)
+    {
+      printf("imu: cannot open %s (%d)\n", HS_IMU_DEVICE, ret);
+      return ret;
+    }
+
+  ret = hs_imu_read(&imu, &sample);
+  if (ret < 0)
+    {
+      printf("imu: read failed (%d)\n", ret);
+    }
+  else
+    {
+      printf("imu: accel_mg=%d,%d,%d gyro_mdps=%d,%d,%d temp_c=%d ts=%u\n",
+             sample.accel_x_mg, sample.accel_y_mg, sample.accel_z_mg,
+             sample.gyro_x_mdps, sample.gyro_y_mdps, sample.gyro_z_mdps,
+             sample.temperature_c, sample.timestamp);
+    }
+
+  hs_imu_close(&imu);
+  return ret;
 }
 
 static int hs_demo_gsr_once(void)
@@ -1250,6 +1281,10 @@ int huangshan_hal_demo_main(int argc, char *argv[])
   if (strcmp(name, "vibration") == 0)
     {
       return hs_demo_vibration(argc > 2 ? argv[2] : NULL);
+    }
+  if (strcmp(name, "imu") == 0)
+    {
+      return hs_demo_imu();
     }
   if (strcmp(name, "lcd") == 0)
     {

@@ -17,6 +17,7 @@
 #include <nuttx/i2c/i2c_master.h>
 #include <nuttx/input/buttons.h>
 #include <nuttx/ioexpander/gpio.h>
+#include <nuttx/sensors/lsm6dsl.h>
 #include <nuttx/timers/pwm.h>
 #include <nuttx/video/fb.h>
 
@@ -308,6 +309,79 @@ int hs_gsr_read(struct hs_gsr_s *gsr, struct hs_gsr_sample_s *sample)
     }
 
   sample->raw10 = hs_gsr_mv_to_raw10(sample->adc_mv);
+  return 0;
+}
+
+int hs_imu_open(struct hs_imu_s *imu)
+{
+  if (imu == NULL)
+    {
+      return -EINVAL;
+    }
+
+  imu->fd = -1;
+  imu->started = false;
+  imu->fd = open(HS_IMU_DEVICE, O_RDONLY);
+  if (imu->fd < 0)
+    {
+      return -errno;
+    }
+
+  if (ioctl(imu->fd, SNIOC_START, 0) < 0)
+    {
+      int err = errno;
+      close(imu->fd);
+      imu->fd = -1;
+      return -err;
+    }
+
+  imu->started = true;
+  return 0;
+}
+
+void hs_imu_close(struct hs_imu_s *imu)
+{
+  if (imu != NULL)
+    {
+      if (imu->fd >= 0 && imu->started)
+        {
+          (void)ioctl(imu->fd, SNIOC_STOP, 0);
+        }
+
+      if (imu->fd >= 0)
+        {
+          close(imu->fd);
+        }
+
+      imu->fd = -1;
+      imu->started = false;
+    }
+}
+
+int hs_imu_read(struct hs_imu_s *imu, struct hs_imu_sample_s *sample)
+{
+  struct lsm6dsl_sensor_data_s data;
+
+  if (imu == NULL || sample == NULL || imu->fd < 0 || !imu->started)
+    {
+      return -EINVAL;
+    }
+
+  memset(&data, 0, sizeof(data));
+  if (ioctl(imu->fd, SNIOC_LSM6DSLSENSORREAD,
+            (unsigned long)(uintptr_t)&data) < 0)
+    {
+      return -errno;
+    }
+
+  sample->accel_x_mg = data.x_data;
+  sample->accel_y_mg = data.y_data;
+  sample->accel_z_mg = data.z_data;
+  sample->gyro_x_mdps = data.g_x_data;
+  sample->gyro_y_mdps = data.g_y_data;
+  sample->gyro_z_mdps = data.g_z_data;
+  sample->temperature_c = (int16_t)data.temperature;
+  sample->timestamp = data.timestamp;
   return 0;
 }
 

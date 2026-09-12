@@ -32,6 +32,7 @@ extern "C"
 #define HS_PWM_DEVICE            "/dev/pwm0"
 #define HS_LCD_DEVICE            "/dev/fb0"
 #define HS_BLE_DEVICE            "/dev/ttyHCI0"
+#define HS_IMU_DEVICE            "/dev/lsm6dsl0"
 
 struct hs_i2c_s
 {
@@ -80,6 +81,32 @@ struct hs_gsr_s
 int hs_gsr_open(struct hs_gsr_s *gsr);
 void hs_gsr_close(struct hs_gsr_s *gsr);
 int hs_gsr_read(struct hs_gsr_s *gsr, struct hs_gsr_sample_s *sample);
+
+/* LSM6DS3TR-C/LSM6DSL accelerometer and gyroscope interface.  The values
+ * are already scaled by the NuttX driver: acceleration is mg, angular rate
+ * is mdps, temperature is degrees Celsius, and timestamp is the sensor's
+ * 24-bit sample counter (returned in the low 16 bits by the driver ABI). */
+struct hs_imu_sample_s
+{
+  int16_t accel_x_mg;
+  int16_t accel_y_mg;
+  int16_t accel_z_mg;
+  int16_t gyro_x_mdps;
+  int16_t gyro_y_mdps;
+  int16_t gyro_z_mdps;
+  int16_t temperature_c;
+  uint16_t timestamp;
+};
+
+struct hs_imu_s
+{
+  int fd;
+  bool started;
+};
+
+int hs_imu_open(struct hs_imu_s *imu);
+void hs_imu_close(struct hs_imu_s *imu);
+int hs_imu_read(struct hs_imu_s *imu, struct hs_imu_sample_s *sample);
 
 struct hs_buttons_s
 {
