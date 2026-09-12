@@ -37,6 +37,8 @@ extern "C"
  * enabled.  The board's MEMS microphone is analog (MIC_BIAS/MIC_ADC_IN), so
  * it must be exposed by the audio driver as PCM; it is not a GPADC channel. */
 #define HS_MIC_DEVICE            "/dev/audio/pcm0c"
+#define HS_MAX30102_I2C_BUS      1u
+#define HS_MAX30102_I2C_ADDRESS  0x57u
 
 struct hs_i2c_s
 {
@@ -54,6 +56,28 @@ int hs_i2c_read(struct hs_i2c_s *bus, uint16_t address,
 int hs_i2c_write_read(struct hs_i2c_s *bus, uint16_t address,
                       const void *wdata, size_t wlength,
                       void *rdata, size_t rlength);
+
+/* MAX30102 optical heart-rate/SpO2 sensor.  The API deliberately exposes
+ * raw RED/IR FIFO samples; heart-rate and SpO2 calculations belong to the
+ * application and these values are not medical measurements. */
+struct hs_max30102_sample_s
+{
+  uint32_t red;
+  uint32_t ir;
+  uint32_t timestamp_ms;
+};
+
+struct hs_max30102_s
+{
+  struct hs_i2c_s i2c;
+  uint8_t address;
+  bool initialized;
+};
+
+int hs_max30102_open(struct hs_max30102_s *sensor, unsigned int busno);
+void hs_max30102_close(struct hs_max30102_s *sensor);
+int hs_max30102_read_sample(struct hs_max30102_s *sensor,
+                            struct hs_max30102_sample_s *sample);
 
 struct hs_adc_s
 {

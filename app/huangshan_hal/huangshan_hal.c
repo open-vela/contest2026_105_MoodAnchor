@@ -11,6 +11,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <time.h>
 
 #include <nuttx/analog/adc.h>
 #include <nuttx/analog/ioctl.h>
@@ -182,6 +183,143 @@ int hs_i2c_write_read(struct hs_i2c_s *bus, uint16_t address,
   messages[1].buffer = rdata;
   messages[1].length = rlength;
   return hs_i2c_transfer(bus, messages, 2);
+}
+
+static int hs_max30102_reg_write(struct hs_max30102_s *sensor,
+                                 uint8_t reg, uint8_t value)
+{
+  uint8_t data[2] = { reg, value };
+  return hs_i2c_write(&sensor->i2c, sensor->address, data, sizeof(data));
+}
+
+static int hs_max30102_reg_read(struct hs_max30102_s *sensor,
+                                uint8_t reg, uint8_t *value)
+{
+  return hs_i2c_write_read(&sensor->i2c, sensor->address, &reg, 1,
+                           value, 1);
+}
+
+int hs_max30102_open(struct hs_max30102_s *sensor, unsigned int busno)
+{
+  uint8_t part_id;
+  int ret;
+
+  if (sensor == NULL)
+    {
+      return -EINVAL;
+    }
+
+  memset(sensor, 0, sizeof(*sensor));
+  sensor->i2c.fd = -1;
+  sensor->address = HS_MAX30102_I2C_ADDRESS;
+  ret = hs_i2c_open(&sensor->i2c, busno, HS_I2C_DEFAULT_FREQUENCY);
+  if (ret < 0)
+    {
+      return ret;
+    }
+
+  ret = hs_max30102_reg_read(sensor, 0xff, &part_id);
+  if (ret < 0)
+    {
+      hs_max30102_close(sensor);
+      return ret;
+    }
+
+  if (part_id != 0x15)
+    {
+      hs_max30102_close(sensor);
+      return -ENODEV;
+    }
+
+  /* Reset, disable interrupts, clear FIFO pointers, then select SpO2 mode:
+   * 100 samples/s, 411 us pulse width, 4096 nA ADC range. */
+  ret = hs_max30102_reg_write(sensor, 0x0a, 0x40);
+  if (ret >= 0)
+    {
+      /* RESET is self-clearing; allow the oscillator and FIFO state to
+       * settle before programming the remaining registers. */
+      usleep(10000);
+    }
+  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x02, 0x00);
+  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x03, 0x00);
+  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x04, 0x00);
+  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x05, 0x00);
+  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x06, 0x00);
+  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x07, 0x4f);
+  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x09, 0x27);
+  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x0c, 0x24);
+  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x0d, 0x24);
+  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x0a, 0x03);
+  if (ret < 0)
+    {
+      hs_max30102_close(sensor);
+      return ret;
+    }
+
+  sensor->initialized = true;
+  (void)part_id;
+  return 0;
+}
+
+void hs_max30102_close(struct hs_max30102_s *sensor)
+{
+  if (sensor != NULL)
+    {
+      if (sensor->initialized && sensor->i2c.fd >= 0)
+        {
+          (void)hs_max30102_reg_write(sensor, 0x0a, 0x40);
+        }
+
+      hs_i2c_close(&sensor->i2c);
+      sensor->initialized = false;
+    }
+}
+
+int hs_max30102_read_sample(struct hs_max30102_s *sensor,
+                            struct hs_max30102_sample_s *sample)
+{
+  uint8_t write_ptr;
+  uint8_t read_ptr;
+  uint8_t fifo[6];
+  struct timespec ts;
+  int ret;
+
+  if (sensor == NULL || sample == NULL || !sensor->initialized)
+    {
+      return -EINVAL;
+    }
+
+  ret = hs_max30102_reg_read(sensor, 0x04, &write_ptr);
+  if (ret < 0)
+    {
+      return ret;
+    }
+
+  ret = hs_max30102_reg_read(sensor, 0x06, &read_ptr);
+  if (ret < 0)
+    {
+      return ret;
+    }
+
+  if (write_ptr == read_ptr)
+    {
+      return -EAGAIN;
+    }
+
+  ret = hs_i2c_write_read(&sensor->i2c, sensor->address, (uint8_t[]){0x07},
+                          1, fifo, sizeof(fifo));
+  if (ret < 0)
+    {
+      return ret;
+    }
+
+  sample->red = ((uint32_t)fifo[0] << 16 | (uint32_t)fifo[1] << 8 |
+                 fifo[2]) & 0x3ffff;
+  sample->ir = ((uint32_t)fifo[3] << 16 | (uint32_t)fifo[4] << 8 |
+                fifo[5]) & 0x3ffff;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  sample->timestamp_ms = (uint32_t)(ts.tv_sec * 1000ull + ts.tv_nsec / 1000000ull);
+  return 0;
 }
 
 int hs_adc_open(struct hs_adc_s *adc, const char *devpath)

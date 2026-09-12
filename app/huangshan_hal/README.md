@@ -7,6 +7,7 @@
 |---|---|---|
 | I2C | `/dev/i2c0`、`/dev/i2c1` | `hs_i2c_open/write/read/write_read` |
 | ADC | `/dev/adc0`（VBAT）、`/dev/adc1`（GSR/PA28） | `hs_adc_open/read`、`hs_gsr_open/read` |
+| MAX30102 心率/血氧模块 | `/dev/i2c1`，地址 `0x57` | `hs_max30102_open/read_sample` |
 | PWM | `/dev/pwm0` | `hs_pwm_open/set/stop` |
 | 震动输出 | `/dev/gpio3`（PA42） | `hs_vibration_open/set/close` |
 | LCD | `/dev/fb0` | `hs_lcd_open/fill/pixel/flush` |
@@ -142,3 +143,31 @@ PA42 只能作为逻辑控制信号。若使用裸偏心马达，必须经过三
 (`VCC_3V3_S`)，黑线接 TP6 或 TP7 (`GND`)，黄线经 1 kΩ 串联电阻接 30P
 第 21 脚 PA28，白线悬空并绝缘。上电先用万用表确认 TP3 对 GND 约 3.3 V；
 禁止接板底 `5V`/`BAT`。保留 30P 11--12 的跳线帽。
+
+## MAX30102 心率/血氧模块
+
+本板 30P 排针上实际引出了传感器 I²C 总线：**8 脚 PA40=SCL、9 脚
+PA39=SDA**，系统节点为 `/dev/i2c1`（该总线同时连接板载 LSM6DSL）。
+MAX30102 可与该总线并联，使用 7 位地址 `0x57`。INT 引脚第一版可悬空，
+驱动通过 FIFO 轮询读取，不依赖中断。
+
+接线（确认手上的模块是带稳压/电平转换的成品 breakout）：
+
+```text
+MAX30102 VCC -> 30P-17 (VDD33_VOUT2, 3.3V)
+MAX30102 GND -> 30P-1/26/35 (GND)
+MAX30102 SCL -> 30P-8 (PA40)
+MAX30102 SDA -> 30P-9 (PA39)
+MAX30102 INT -> 悬空（可选）
+```
+
+裸 MAX30102 芯片要求 1.8V 逻辑和独立 LED 供电，不能直接按上表接 3.3V；
+不确定时先查模块原理图。命令：
+
+```text
+nsh> huangshan_hal_demo max30102_once
+nsh> huangshan_hal_demo max30102_stream
+```
+
+接口返回原始 RED/IR 光电数据和时间戳，供上层心率/血氧算法使用；数据未经
+医疗校准，不应作为诊断结论。

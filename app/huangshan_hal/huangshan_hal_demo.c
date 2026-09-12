@@ -413,7 +413,7 @@ static void hs_i2c_format(char *buf, size_t size, const uint8_t *found,
 
 static void hs_demo_help(void)
 {
-  printf("huangshan_hal_demo <all|i2c|adc|power|pwm|vibration|imu|mic_once|mic_stream|lcd|lcdtest|ble|ble_adv|sysinfo|gsr_once|gsr_cal|gsr_stream>\n");
+  printf("huangshan_hal_demo <all|i2c|adc|power|pwm|vibration|imu|mic_once|mic_stream|lcd|lcdtest|ble|ble_adv|sysinfo|gsr_once|gsr_cal|gsr_stream|max30102_once|max30102_stream>\n");
   printf("  i2c: probe FT6146 at I2C1 address 0x38\n");
   printf("  adc: read the VBAT ADC channel (channel 5)\n");
   printf("  power: print USB, VBAT, charger registers and KEY2 once\n");
@@ -430,6 +430,83 @@ static void hs_demo_help(void)
   printf("  gsr_once: read Grove GSR from PA28 (/dev/adc1) once\n");
   printf("  gsr_cal [seconds]: open-electrode calibration, default 30 seconds\n");
   printf("  gsr_stream <CAL_RAW10>: CSV at about 5 Hz; Ctrl+C to exit\n");
+  printf("  max30102_once: read one MAX30102 RED/IR sample on /dev/i2c1\n");
+  printf("  max30102_stream: poll MAX30102 FIFO and print RED/IR at about 25 Hz\n");
+}
+
+static int hs_demo_max30102_once(void)
+{
+  struct hs_max30102_s sensor;
+  struct hs_max30102_sample_s sample;
+  int ret;
+
+  ret = hs_max30102_open(&sensor, HS_MAX30102_I2C_BUS);
+  if (ret < 0)
+    {
+      printf("max30102: open failed on /dev/i2c%u addr=0x%02x (%d)\n",
+             HS_MAX30102_I2C_BUS, HS_MAX30102_I2C_ADDRESS, ret);
+      return ret;
+    }
+
+  ret = hs_max30102_read_sample(&sensor, &sample);
+  if (ret < 0)
+    {
+      printf("max30102: sample unavailable (%d), keep sensor on finger and retry\n",
+             ret);
+    }
+  else
+    {
+      printf("max30102: addr=0x%02x red=%lu ir=%lu time_ms=%lu\n",
+             HS_MAX30102_I2C_ADDRESS, (unsigned long)sample.red,
+             (unsigned long)sample.ir, (unsigned long)sample.timestamp_ms);
+    }
+
+  hs_max30102_close(&sensor);
+  return ret;
+}
+
+static int hs_demo_max30102_stream(void)
+{
+  struct hs_max30102_s sensor;
+  struct hs_max30102_sample_s sample;
+  int ret;
+  int errors = 0;
+
+  ret = hs_max30102_open(&sensor, HS_MAX30102_I2C_BUS);
+  if (ret < 0)
+    {
+      printf("max30102_stream: open failed (%d)\n", ret);
+      return ret;
+    }
+
+  printf("time_ms,red,ir,status\n");
+  while (1)
+    {
+      ret = hs_max30102_read_sample(&sensor, &sample);
+      if (ret == 0)
+        {
+          printf("%lu,%lu,%lu,OK\n", (unsigned long)sample.timestamp_ms,
+                 (unsigned long)sample.red, (unsigned long)sample.ir);
+          errors = 0;
+        }
+      else if (ret == -EAGAIN)
+        {
+          errors = 0;
+        }
+      else
+        {
+          printf("0,0,0,ERROR(%d)\n", ret);
+          if (++errors >= 5)
+            {
+              break;
+            }
+        }
+
+      usleep(40000);
+    }
+
+  hs_max30102_close(&sensor);
+  return ret == -EAGAIN ? 0 : ret;
 }
 
 static int hs_demo_imu(void)
@@ -1436,6 +1513,14 @@ int huangshan_hal_demo_main(int argc, char *argv[])
         }
 
       return hs_demo_gsr_stream((uint16_t)calibration);
+    }
+  if (strcmp(name, "max30102_once") == 0)
+    {
+      return hs_demo_max30102_once();
+    }
+  if (strcmp(name, "max30102_stream") == 0)
+    {
+      return hs_demo_max30102_stream();
     }
   if (strcmp(name, "all") == 0)
     {
