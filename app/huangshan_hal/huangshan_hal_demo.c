@@ -418,7 +418,7 @@ static void hs_demo_help(void)
   printf("  adc: read the VBAT ADC channel (channel 5)\n");
   printf("  power: print USB, VBAT, charger registers and KEY2 once\n");
   printf("  pwm: output 1 kHz, 50%% on /dev/pwm0 for 2 seconds\n");
-  printf("  vibration [on|off]: drive PA42 high/low for the vibration module\n");
+  printf("  vibration [on|off]: drive PA20 (30P-24) high/low for the vibration module\n");
   printf("  imu: read one LSM6DSL accelerometer/gyroscope sample\n");
   printf("  mic_once: read one PCM block from the board MEMS microphone\n");
   printf("  mic_stream: print microphone RMS/peak at about 20 Hz\n");
@@ -984,7 +984,7 @@ static int hs_demo_vibration(const char *mode)
   if (ret >= 0)
     {
       ret = hs_vibration_set(&vibration, enabled);
-      printf("vibration: PA42=%d (%s)\n", enabled ? 1 : 0,
+      printf("vibration: PA20=%d (%s)\n", enabled ? 1 : 0,
              ret < 0 ? "failed" : "ok");
     }
   else
@@ -1345,7 +1345,7 @@ static int hs_demo_sysinfo(void)
       hs_lcd_text(&lcd, value_x, y + 1, line, 0xf81f, 2);
       y += 20;
 
-      hs_lcd_text(&lcd, safe_x, y, "VIB PA42:", 0xf81f, 2);
+      hs_lcd_text(&lcd, safe_x, y, "VIB PA20:", 0xf81f, 2);
       snprintf(line, sizeof(line), " %s", hs_vibration_is_enabled(&vibration)
                ? "ON" : "OFF");
       hs_lcd_text(&lcd, value_x, y + 1, line, 0xf81f, 2);

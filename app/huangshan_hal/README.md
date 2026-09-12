@@ -9,7 +9,7 @@
 | ADC | `/dev/adc0`（VBAT）、`/dev/adc1`（GSR/PA28） | `hs_adc_open/read`、`hs_gsr_open/read` |
 | MAX30102 心率/血氧模块 | `/dev/i2c1`，地址 `0x57` | `hs_max30102_open/read_sample` |
 | PWM | `/dev/pwm0` | `hs_pwm_open/set/stop` |
-| 震动输出 | `/dev/gpio3`（PA42） | `hs_vibration_open/set/close` |
+| 震动输出 | `/dev/gpio3`（PA20，30P-24） | `hs_vibration_open/set/close` |
 | LCD | `/dev/fb0` | `hs_lcd_open/fill/pixel/flush` |
 | BLE H:4 | `/dev/ttyHCI0` | `hs_ble_open/reset/command` |
 | 板载麦克风 | `/dev/audio/pcm0c`（需 AUDCODEC 音频后端） | `hs_mic_open/read/close` |
@@ -126,8 +126,9 @@ hs_gsr_close(&gsr);
 
 ## 震动模块和 KEY2
 
-PA42 作为普通推挽输出，注册为 `/dev/gpio3`。PA30 保留给 LSM6DSL 传感器 LDO，
-不得用于震动控制。`hs_vibration_set(..., true)`
+PA20（30P-24，VIB PWM）作为普通推挽输出，注册为 `/dev/gpio3`。PA30
+保留给 LSM6DSL/MAX30102 传感器电源，PA42 是 Audio_PA_EN，均不得用于震动控制。
+`hs_vibration_set(..., true)`
 输出高电平，`false` 输出低电平。板载 KEY2（PA43）在开机自动运行的
 `sysinfo` 面板中按一下开启震动，再按一下关闭震动；也可以在串口单独测试：
 
@@ -136,7 +137,7 @@ nsh> huangshan_hal_demo vibration on
 nsh> huangshan_hal_demo vibration off
 ```
 
-PA42 只能作为逻辑控制信号。若使用裸偏心马达，必须经过三极管或 MOSFET
+PA20 只能作为逻辑控制信号。若使用裸偏心马达，必须经过三极管或 MOSFET
 驱动，并加续流二极管，不能把马达线圈直接接到 MCU GPIO。
 
 接线前先完全断开 USB 与电池：Grove 红线接板底 `3V` 测试焊盘 TP3

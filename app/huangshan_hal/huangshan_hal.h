@@ -28,7 +28,7 @@ extern "C"
 #define HS_ADC_VBAT_CHANNEL      5
 #define HS_ADC_GSR_CHANNEL       0
 #define HS_BUTTONS_DEVICE        "/dev/buttons"
-#define HS_VIBRATION_DEVICE      "/dev/gpio3"
+#define HS_VIBRATION_DEVICE      "/dev/gpio3" /* PA20, 30P-24 VIB PWM */
 #define HS_PWM_DEVICE            "/dev/pwm0"
 #define HS_LCD_DEVICE            "/dev/fb0"
 #define HS_BLE_DEVICE            "/dev/ttyHCI0"
@@ -161,8 +161,9 @@ int hs_buttons_open(struct hs_buttons_s *buttons, const char *devpath);
 void hs_buttons_close(struct hs_buttons_s *buttons);
 int hs_buttons_read(struct hs_buttons_s *buttons, uint32_t *state);
 
-/* PA42 vibration control output (exported as /dev/gpio3).  PA30 is reserved
- * for the LSM6DSL sensor LDO and must not be driven by the vibration path.
+/* PA20 vibration control output (exported as /dev/gpio3).  PA30 is reserved
+ * for the LSM6DSL/MAX30102 sensor power path and PA42 is Audio_PA_EN; neither
+ * must be driven by the vibration path.
  * Drive a transistor/MOSFET input or a vibration-driver EN pin; do not
  * connect a bare motor directly to a GPIO. */
 struct hs_vibration_s
