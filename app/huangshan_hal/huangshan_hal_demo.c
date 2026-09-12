@@ -1163,13 +1163,14 @@ static int hs_demo_sysinfo(void)
   struct hs_vibration_s vibration = { .fd = -1 };
   struct hs_imu_s imu = { .fd = -1, .started = false };
   struct hs_mic_s mic = { .fd = -1 };
+  struct hs_max30102_s max30102 = { .i2c = { .fd = -1 } };
   int vbus_fd = -1;
   uint8_t found0[16];
   uint8_t found1[16];
   char line[64];
   unsigned int tick = 0;
-  int n0;
-  int n1;
+  int n0 = -1;
+  int n1 = -1;
   int ret;
 
   ret = hs_lcd_open(&lcd, NULL);
@@ -1190,6 +1191,7 @@ static int hs_demo_sysinfo(void)
   vbus_fd = open("/dev/gpio1", O_RDONLY);
   hs_imu_open(&imu);
   hs_mic_open(&mic, 16000);
+  hs_max30102_open(&max30102, HS_MAX30102_I2C_BUS);
 
   printf("sysinfo panel on, press Ctrl+C to exit\n");
 
@@ -1207,6 +1209,8 @@ static int hs_demo_sysinfo(void)
       int mic_rms = 0;
       int mic_peak = 0;
       int16_t mic_samples[64];
+      struct hs_max30102_sample_s max_sample;
+      int maxret = -ENODEV;
       uint32_t button_state = 0;
       int button_ret;
       uint8_t reg = 0;
@@ -1221,8 +1225,13 @@ static int hs_demo_sysinfo(void)
 
       clock_gettime(CLOCK_MONOTONIC, &ts);
 
-      n0 = hs_i2c_scan(&i2c0, found0, 16);
-      n1 = hs_i2c_scan(&i2c1, found1, 16);
+      /* A full two-bus scan probes 224 addresses and is far too expensive
+       * for every display frame.  Cache it and refresh every five seconds. */
+      if ((tick % 25) == 0)
+        {
+          n0 = hs_i2c_scan(&i2c0, found0, 16);
+          n1 = hs_i2c_scan(&i2c1, found1, 16);
+        }
 
       if (adc.fd >= 0)
         {
@@ -1264,6 +1273,11 @@ static int hs_demo_sysinfo(void)
             {
               micret = -EAGAIN;
             }
+        }
+
+      if (max30102.initialized)
+        {
+          maxret = hs_max30102_read_sample(&max30102, &max_sample);
         }
 
       button_ret = -ENODEV;
@@ -1310,7 +1324,23 @@ static int hs_demo_sysinfo(void)
                           (unsigned long)(uintptr_t)&vbus);
         }
 
-      hs_lcd_fill(&lcd, 0x0000);
+      /* Clear the local framebuffer without flushing it.  The old code
+       * called hs_lcd_fill(), which itself flushed a full frame, then flushed
+       * again after drawing the labels; that doubled the visible refresh time. */
+      if (lcd.bpp == 16)
+        {
+          uint16_t *row = (uint16_t *)lcd.framebuffer;
+          uint16_t clear_y;
+          for (clear_y = 0; clear_y < lcd.yres; clear_y++)
+            {
+              memset(row, 0, (size_t)lcd.xres * sizeof(uint16_t));
+              row = (uint16_t *)((uint8_t *)row + lcd.stride);
+            }
+        }
+      else
+        {
+          memset(lcd.framebuffer, 0, lcd.length);
+        }
 
       /* Title */
       hs_lcd_cn_text(&lcd, safe_x, y, g_cn_title,
@@ -1433,6 +1463,20 @@ static int hs_demo_sysinfo(void)
       hs_lcd_text(&lcd, value_x, y + 1, line, 0x07ff, 2);
       y += 20;
 
+      hs_lcd_text(&lcd, safe_x, y, "MAX:", 0x07e0, 2);
+      if (maxret >= 0)
+        {
+          snprintf(line, sizeof(line), "R:%lu I:%lu",
+                   (unsigned long)max_sample.red,
+                   (unsigned long)max_sample.ir);
+        }
+      else
+        {
+          snprintf(line, sizeof(line), "-- (0X57)");
+        }
+      hs_lcd_text(&lcd, value_x, y + 1, line, 0x07e0, 2);
+      y += 20;
+
       hs_lcd_text(&lcd, safe_x, y, "MIC:", 0x07ff, 2);
       if (micret >= 0)
         {
@@ -1459,7 +1503,7 @@ static int hs_demo_sysinfo(void)
 
       hs_lcd_flush(&lcd);
       tick++;
-      sleep(1);
+      usleep(200000);
     }
 
 out:
@@ -1471,6 +1515,7 @@ out:
   hs_buttons_close(&buttons);
   hs_imu_close(&imu);
   hs_mic_close(&mic);
+  hs_max30102_close(&max30102);
   hs_gsr_close(&gsr);
   hs_vibration_close(&vibration);
   hs_adc_close(&adc);

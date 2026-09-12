@@ -922,23 +922,39 @@ int hs_lcd_pixel(struct hs_lcd_s *lcd, uint16_t x, uint16_t y,
 
 int hs_lcd_fill(struct hs_lcd_s *lcd, uint32_t color)
 {
-  uint16_t x;
   uint16_t y;
-  int ret;
 
   if (!hs_lcd_valid(lcd))
     {
       return -EINVAL;
     }
 
-  for (y = 0; y < lcd->yres; y++)
+  /* Fill the mapped framebuffer directly.  Calling hs_lcd_pixel() for every
+   * pixel adds several bounds checks per pixel and made a full-screen clear
+   * noticeably expensive on the 390x450 panel. */
+  if (lcd->bpp == 16)
     {
-      for (x = 0; x < lcd->xres; x++)
+      uint16_t *row = (uint16_t *)lcd->framebuffer;
+      uint16_t value = (uint16_t)color;
+      for (y = 0; y < lcd->yres; y++)
         {
-          ret = hs_lcd_pixel(lcd, x, y, color);
-          if (ret < 0)
+          uint16_t x;
+          for (x = 0; x < lcd->xres; x++)
             {
-              return ret;
+              row[x] = value;
+            }
+
+          row = (uint16_t *)((uint8_t *)row + lcd->stride);
+        }
+    }
+  else
+    {
+      for (y = 0; y < lcd->yres; y++)
+        {
+          uint16_t x;
+          for (x = 0; x < lcd->xres; x++)
+            {
+              (void)hs_lcd_pixel(lcd, x, y, color);
             }
         }
     }
