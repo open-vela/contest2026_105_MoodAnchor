@@ -66,7 +66,7 @@ cd /path/to/openvela/contest2026_105_MoodAnchor
 - `/dev/adc1`（PA28）GSR 通道和 `/dev/adc0` 原供电通道；
 - PA28 模拟输入配置，并关闭与其冲突的 TF 卡/SPI1；
 - PA44 VBUS 检测输入，用于区分有线供电和电池供电；
-- PA30 震动控制输出（新增 `/dev/gpio3`），KEY2 按下沿切换震动；
+- PA20（30P-24）震动控制输出（新增 `/dev/gpio3`），KEY2 按下沿切换震动；PA30 保留给传感器电源控制；
 - LCD 冷启动供电延时，避免断电重启后黑屏；
 - 开机 3 秒自动启动中文 `sysinfo` 面板；
 - SiFli UART 的非法 `return ch` 编译修复；
