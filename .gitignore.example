@@ -18,3 +18,9 @@ out/
 *.elf
 *.hex
 *.map
+# NuttX Make 树内构建残留（软链进编译树时会在源码目录生成）
+.depend
+Make.dep
+.built
+__pycache__/
+scripts/__pycache__/

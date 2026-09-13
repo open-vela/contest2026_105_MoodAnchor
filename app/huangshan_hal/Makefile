@@ -9,6 +9,6 @@ PRIORITY  = SCHED_PRIORITY_DEFAULT
 STACKSIZE = 4096
 MODULE    = $(CONFIG_LVX_USE_HUANGSHAN_HAL)
 
-MAINSRC = huangshan_hal.c huangshan_hal_demo.c
+MAINSRC = huangshan_hal.c huangshan_hal_demo.c hs_ble_host.c hs_ble_gatt.c
 
 include $(APPDIR)/Application.mk

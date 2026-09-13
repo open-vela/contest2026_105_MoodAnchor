@@ -3,6 +3,7 @@
  ****************************************************************************/
 
 #include "huangshan_hal.h"
+#include "hs_ble.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -338,6 +339,15 @@ static const uint32_t g_cn_battery_supply[] =
   { 0x7535, 0x6c60, 0x4f9b, 0x7535 };
 static const uint32_t g_cn_gsr[] = { 0x76ae, 0x7535 };
 static const uint32_t g_cn_imu[] = { 0x516d, 0x8f74 };
+static const uint32_t g_cn_spo2[] = { 0x8840, 0x6c27 };
+
+/* Addresses worth probing periodically on the panel.  A full 0x08-0x77 scan
+ * must not run inside the display loop: every absent address costs an I2C
+ * timeout, which would freeze the UI for many seconds. */
+static const uint8_t g_probe_list[] =
+{
+  0x1c, 0x1e, 0x29, 0x38, 0x40, 0x44, 0x49, 0x57, 0x68, 0x69, 0x6a, 0x6b
+};
 static const uint32_t g_cn_screen[] = { 0x5c4f, 0x5e55 };
 static const uint32_t g_cn_exit[] = { 0x6307, 0x4ee4, 0x9000, 0x51fa };
 
@@ -360,33 +370,6 @@ static void hs_lcd_text(struct hs_lcd_s *lcd, int x, int y,
       cx += 6 * scale;
       text++;
     }
-}
-
-/* Scan one I2C bus; returns number of ACKing addresses or -1 if closed. */
-
-static int hs_i2c_scan(struct hs_i2c_s *bus, uint8_t *found, int max)
-{
-  int n = 0;
-  int addr;
-
-  if (bus == NULL || bus->fd < 0)
-    {
-      return -1;
-    }
-
-  for (addr = 0x08; addr <= 0x77 && n < max; addr++)
-    {
-      uint8_t reg = 0;
-      uint8_t value;
-
-      if (hs_i2c_write_read(bus, (uint16_t)addr, &reg, 1,
-                            &value, 1) >= 0)
-        {
-          found[n++] = (uint8_t)addr;
-        }
-    }
-
-  return n;
 }
 
 static void hs_i2c_format(char *buf, size_t size, const uint8_t *found,
@@ -413,9 +396,36 @@ static void hs_i2c_format(char *buf, size_t size, const uint8_t *found,
     }
 }
 
+/* Scan one I2C bus completely.  Returns the number of ACKing addresses, or
+ * -1 when the bus could not be opened. */
+
+static int hs_i2c_scan(struct hs_i2c_s *bus, uint8_t *found, int max)
+{
+  int n = 0;
+  int addr;
+
+  if (bus == NULL || bus->fd < 0)
+    {
+      return -1;
+    }
+
+  for (addr = 0x08; addr <= 0x77 && n < max; addr++)
+    {
+      uint8_t reg = 0;
+      uint8_t value;
+
+      if (hs_i2c_write_read(bus, (uint16_t)addr, &reg, 1, &value, 1) >= 0)
+        {
+          found[n++] = (uint8_t)addr;
+        }
+    }
+
+  return n;
+}
+
 static void hs_demo_help(void)
 {
-  printf("huangshan_hal_demo <all|i2c|adc|power|pwm|vibration|imu|mic_once|mic_stream|lcd|lcdtest|ble|ble_adv|sysinfo|gsr_once|gsr_cal|gsr_stream|max30102_once|max30102_stream>\n");
+  printf("huangshan_hal_demo <all|i2c|adc|power|pwm|vibration|imu|mic_once|mic_stream|lcd|lcdtest|ble|ble_adv|blehost|bleevent|blestatus|sysinfo|gsr_once|gsr_cal|gsr_stream|max30102_once|max30102_stream>\n");
   printf("  i2c: probe FT6146 at I2C1 address 0x38\n");
   printf("  adc: read the VBAT ADC channel (channel 5)\n");
   printf("  power: print USB, VBAT, charger registers and KEY2 once\n");
@@ -428,12 +438,19 @@ static void hs_demo_help(void)
   printf("  lcdtest: LCD color bars, checkerboard and text (Ctrl+C to exit)\n");
   printf("  ble: open HCI transport and issue HCI Reset\n");
   printf("  ble_adv [name]: advertise a BLE local name for testing\n");
+  printf("  blehost [xxxx]: bring up the NuttX BLE host stack, install the GATT\n");
+  printf("                  server and advertise as 是非钟-xxxx\n");
+  printf("  bleevent [type] [risk] [conf] [flags]: notify one 11 byte event packet\n");
+  printf("  blestatus: print the BLE host/GATT/advertising state\n");
   printf("  sysinfo: live debug panel on the LCD (Ctrl+C to exit)\n");
+  printf("  i2cscan: sweep 0x08-0x77 on /dev/i2c0 and /dev/i2c1\n");
   printf("  gsr_once: read Grove GSR from PA28 (/dev/adc1) once\n");
   printf("  gsr_cal [seconds]: open-electrode calibration, default 30 seconds\n");
   printf("  gsr_stream <CAL_RAW10>: CSV at about 5 Hz; Ctrl+C to exit\n");
   printf("  max30102_once: read one MAX30102 RED/IR sample on /dev/i2c1\n");
   printf("  max30102_stream: poll MAX30102 FIFO and print RED/IR at about 25 Hz\n");
+  printf("  max30102_regs: dump pulse-oximeter registers and one FIFO burst\n");
+  printf("                 optional <hz> argument, e.g. 100000\n");
 }
 
 static int hs_demo_max30102_once(void)
@@ -463,6 +480,9 @@ static int hs_demo_max30102_once(void)
              (unsigned long)sample.ir, (unsigned long)sample.timestamp_ms);
     }
 
+  printf("max30102: part_id=0x%02x rev_id=0x%02x (0x15 = genuine MAX30102)\n",
+         sensor.part_id, sensor.rev_id);
+
   hs_max30102_close(&sensor);
   return ret;
 }
@@ -481,6 +501,8 @@ static int hs_demo_max30102_stream(void)
       return ret;
     }
 
+  printf("max30102: part_id=0x%02x rev_id=0x%02x (0x15 = genuine MAX30102)\n",
+         sensor.part_id, sensor.rev_id);
   printf("time_ms,red,ir,status\n");
   while (1)
     {
@@ -1137,6 +1159,17 @@ static int hs_demo_ble_adv(const char *name)
 
       printf("ble advertising (%s): %s (%d)\n", name,
              ret < 0 ? "failed" : "ok", ret);
+
+      /* Keep the HCI session alive.  The SiFli controller is deinitialised
+       * when /dev/ttyHCI0 is closed, which would stop advertising immediately
+       * after a one-shot command exits. */
+      if (ret >= 0)
+        {
+          for (;;)
+            {
+              sleep(1);
+            }
+        }
     }
   else
     {
@@ -1148,15 +1181,141 @@ static int hs_demo_ble_adv(const char *name)
 }
 
 /* ------------------------------------------------------------------------
+ * BLE GATT peripheral (NuttX host stack)
+ * ------------------------------------------------------------------------ */
+
+static int hs_demo_blehost(const char *suffix)
+{
+  int ret;
+
+  if (hs_ble_host_ready())
+    {
+      printf("blehost: already running as \"%s\"\n", hs_ble_gatt_name());
+      return OK;
+    }
+
+  ret = hs_ble_host_start();
+  if (ret < 0)
+    {
+      printf("blehost: host start failed: %d\n", ret);
+      return ret;
+    }
+
+  printf("blehost: host stack up\n");
+
+  ret = hs_ble_gatt_start(suffix);
+  if (ret < 0)
+    {
+      printf("blehost: GATT/advertising start failed: %d\n", ret);
+      return ret;
+    }
+
+  printf("blehost: ready, connect with nRF Connect and subscribe to "
+         "\"d38a0002\"\n");
+  return OK;
+}
+
+static int hs_demo_bleevent(int argc, char *argv[])
+{
+  uint8_t type  = HS_BLE_EV_SELFTEST;
+  uint8_t risk  = HS_BLE_RISK_MEDIUM;
+  uint8_t conf  = 80;
+  uint8_t flags = HS_BLE_FLAG_ACK_REQ | HS_BLE_FLAG_SIMULATED;
+  int ret;
+
+  if (!hs_ble_host_ready())
+    {
+      printf("bleevent: run blehost first\n");
+      return -ENOTCONN;
+    }
+
+  if (argc > 2)
+    {
+      type = (uint8_t)strtoul(argv[2], NULL, 0);
+    }
+
+  if (argc > 3)
+    {
+      risk = (uint8_t)strtoul(argv[3], NULL, 0);
+    }
+
+  if (argc > 4)
+    {
+      conf = (uint8_t)strtoul(argv[4], NULL, 0);
+    }
+
+  if (argc > 5)
+    {
+      flags = (uint8_t)strtoul(argv[5], NULL, 0);
+    }
+
+  ret = hs_ble_event_notify(type, risk, conf, flags);
+  if (ret < 0)
+    {
+      printf("bleevent: notify failed: %d\n", ret);
+    }
+
+  return ret < 0 ? ret : OK;
+}
+
+static int hs_demo_blestatus(void)
+{
+  const uint8_t *addr = hs_ble_host_bdaddr();
+  uint8_t ctrl[HS_BLE_CTRL_MAX];
+  size_t ctrllen;
+  uint16_t handle;
+  uint16_t interval;
+
+  printf("host      : %s\n", hs_ble_host_ready() ? "ready" : "down");
+
+  if (addr != NULL)
+    {
+      printf("bdaddr    : %02x:%02x:%02x:%02x:%02x:%02x\n",
+             addr[5], addr[4], addr[3], addr[2], addr[1], addr[0]);
+    }
+
+  printf("adv name  : %s\n", hs_ble_host_ready() ? hs_ble_gatt_name() : "-");
+
+  handle   = hs_ble_host_conn_handle();
+  interval = hs_ble_host_conn_interval();
+
+  if (handle == 0xffff)
+    {
+      printf("connection: none\n");
+    }
+  else
+    {
+      printf("connection: handle 0x%04x, interval %.2f ms\n",
+             handle, (double)interval * 1.25);
+    }
+
+  ctrllen = hs_ble_control_last(ctrl, sizeof(ctrl));
+  if (ctrllen > 0)
+    {
+      printf("last ctrl : opcode 0x%02x, %u byte(s)\n", ctrl[0],
+             (unsigned)ctrllen);
+    }
+  else
+    {
+      printf("last ctrl : none\n");
+    }
+
+  printf("event seq : %u\n", hs_ble_event_seq());
+  return OK;
+}
+
+/* ------------------------------------------------------------------------
  * sysinfo: live debug panel on the LCD
  * ------------------------------------------------------------------------ */
 
 static int hs_demo_sysinfo(void)
 {
   const int safe_x = 24;
-  const int value_x = 64;
+  /* Four 16px CJK glyphs at x=24 occupy through x=91.  Keep a
+   * separate numeric column so values cannot overwrite the labels. */
+  const int value_x = 104;
   const int dynamic_y = 20;
-  const int dynamic_h = 400;
+  const int dynamic_h = 340;
   struct hs_lcd_s lcd = { .fd = -1 };
   struct hs_i2c_s i2c0 = { .fd = -1 };
   struct hs_i2c_s i2c1 = { .fd = -1 };
@@ -1172,10 +1331,18 @@ static int hs_demo_sysinfo(void)
   uint8_t found1[16];
   char line[64];
   unsigned int tick = 0;
-  int n0 = -1;
-  int n1 = -1;
+  int n0 = 0;
+  int n1 = 0;
+  uint8_t max_id_ff = 0;
+  uint8_t max_id_fe = 0;
+  int max_id_ret = -ENODEV;
+  int probe_idx0 = 0;
+  int probe_idx1 = 0;
   int ret;
   bool first_frame = true;
+  bool max_sample_valid = false;
+  uint32_t max_last_red = 0;
+  uint32_t max_last_ir = 0;
 
   ret = hs_lcd_open(&lcd, NULL);
   if (ret < 0)
@@ -1229,12 +1396,67 @@ static int hs_demo_sysinfo(void)
 
       clock_gettime(CLOCK_MONOTONIC, &ts);
 
-      /* A full two-bus scan probes 224 addresses and is far too expensive
-       * for every display frame.  Cache it and refresh every five seconds. */
-      if ((tick % 25) == 0)
+      /* Probe one candidate address per bus per frame.  A full cycle of the
+       * candidate list takes about a second at the panel's refresh rate, and
+       * no frame ever stalls waiting for an absent device.  Results from the
+       * previous cycle stay visible until the new one completes. */
+      if (i2c0.fd >= 0)
         {
-          n0 = hs_i2c_scan(&i2c0, found0, 16);
-          n1 = hs_i2c_scan(&i2c1, found1, 16);
+          uint8_t probe_reg = 0;
+          uint8_t probe_value = 0;
+
+          if (hs_i2c_write_read(&i2c0, g_probe_list[probe_idx0],
+                                &probe_reg, 1, &probe_value, 1) >= 0 &&
+              n0 < (int)(sizeof(found0) / sizeof(found0[0])))
+            {
+              found0[n0++] = g_probe_list[probe_idx0];
+            }
+
+          if (++probe_idx0 >= (int)(sizeof(g_probe_list) /
+                                    sizeof(g_probe_list[0])))
+            {
+              probe_idx0 = 0;
+              n0 = 0;
+            }
+        }
+
+      if (i2c1.fd >= 0)
+        {
+          uint8_t probe_reg = 0;
+          uint8_t probe_value = 0;
+
+          if (hs_i2c_write_read(&i2c1, g_probe_list[probe_idx1],
+                                &probe_reg, 1, &probe_value, 1) >= 0 &&
+              n1 < (int)(sizeof(found1) / sizeof(found1[0])))
+            {
+              found1[n1++] = g_probe_list[probe_idx1];
+            }
+
+          if (++probe_idx1 >= (int)(sizeof(g_probe_list) /
+                                    sizeof(g_probe_list[0])))
+            {
+              probe_idx1 = 0;
+              n1 = 0;
+            }
+        }
+
+      /* Read the pulse-oximeter identification registers every ~3 seconds.
+       * This separates a wiring/power fault (no ACK) from an unexpected chip
+       * model (ACK but a part ID other than MAX30102's 0x15). */
+      if ((tick % 30u) == 0u && i2c1.fd >= 0)
+        {
+          uint8_t idreg = 0xff;
+
+          max_id_ff = 0;
+          max_id_fe = 0;
+          max_id_ret = hs_i2c_write_read(&i2c1, HS_MAX30102_I2C_ADDRESS,
+                                         &idreg, 1, &max_id_ff, 1);
+          if (max_id_ret >= 0)
+            {
+              idreg = 0xfe;
+              (void)hs_i2c_write_read(&i2c1, HS_MAX30102_I2C_ADDRESS,
+                                      &idreg, 1, &max_id_fe, 1);
+            }
         }
 
       if (adc.fd >= 0)
@@ -1282,6 +1504,14 @@ static int hs_demo_sysinfo(void)
       if (max30102.initialized)
         {
           maxret = hs_max30102_read_sample(&max30102, &max_sample);
+          if (maxret >= 0)
+            {
+              /* FIFO polling can legitimately return EAGAIN between samples.
+               * Keep the last valid pair visible instead of blanking the panel. */
+              max_last_red = max_sample.red;
+              max_last_ir = max_sample.ir;
+              max_sample_valid = true;
+            }
         }
 
       button_ret = -ENODEV;
@@ -1381,6 +1611,22 @@ static int hs_demo_sysinfo(void)
       hs_lcd_text(&lcd, value_x + 26, y + 1, line, 0xffe0, 2);
       y += 20;
 
+      /* MAX30102 identification: NOACK means wiring/power, a HEX part ID
+       * other than 15 means the module is a different chip model. */
+      hs_lcd_cn_text(&lcd, safe_x, y, g_cn_spo2,
+                     sizeof(g_cn_spo2) / sizeof(g_cn_spo2[0]), 0xf81f, 1);
+      if (max_id_ret < 0)
+        {
+          snprintf(line, sizeof(line), "NOACK(%d)", max_id_ret);
+        }
+      else
+        {
+          snprintf(line, sizeof(line), "FF=%02X FE=%02X", max_id_ff,
+                   max_id_fe);
+        }
+      hs_lcd_text(&lcd, value_x, y + 1, line, 0xf81f, 2);
+      y += 20;
+
       /* Touch and battery voltage.  Keep the numeric values in ASCII for
        * readability, with fixed Chinese labels beside them. */
       hs_lcd_cn_text(&lcd, safe_x, y, g_cn_touch,
@@ -1394,7 +1640,7 @@ static int hs_demo_sysinfo(void)
                      sizeof(g_cn_supply_voltage[0]),
                      0x07e0, 1);
       snprintf(line, sizeof(line), "%ldMV", (long)adcval);
-      hs_lcd_text(&lcd, safe_x + 72, y + 1, line, 0x07e0, 2);
+      hs_lcd_text(&lcd, value_x, y + 1, line, 0x07e0, 2);
       y += 20;
 
       if (vbusret >= 0 && vbus)
@@ -1441,7 +1687,7 @@ static int hs_demo_sysinfo(void)
                vbusret >= 0 ? (vbus ? "1" : "0") : "--",
                (chgret01 >= 0 && chgret05 >= 0) ? "1" : "--",
                chg01, chg05);
-      hs_lcd_text(&lcd, safe_x + 76, y + 1, line, 0xff80, 2);
+      hs_lcd_text(&lcd, value_x, y + 1, line, 0xff80, 2);
       y += 20;
 
       if (gsrret >= 0)
@@ -1474,11 +1720,16 @@ static int hs_demo_sysinfo(void)
       y += 20;
 
       hs_lcd_text(&lcd, safe_x, y, "MAX:", 0x07e0, 2);
-      if (maxret >= 0)
+      if (max_sample_valid)
         {
-          snprintf(line, sizeof(line), "R:%lu I:%lu",
-                   (unsigned long)max_sample.red,
-                   (unsigned long)max_sample.ir);
+          snprintf(line, sizeof(line), "R:%lu I:%lu %s",
+                   (unsigned long)max_last_red,
+                   (unsigned long)max_last_ir,
+                   maxret == -EAGAIN ? "WAIT" : "OK");
+        }
+      else if (max30102.initialized && maxret == -EAGAIN)
+        {
+          snprintf(line, sizeof(line), "WAIT (0X57)");
         }
       else
         {
@@ -1521,18 +1772,27 @@ static int hs_demo_sysinfo(void)
 #if defined(FBIO_UPDATE) && defined(CONFIG_FB_UPDATE)
           struct fb_area_s area;
 
+          /* Labels are static after the first frame.  Submit only the
+           * numeric column; the LCD driver packs its full-stride rows into
+           * contiguous DMA chunks for this partial area. */
           area.x = value_x;
           area.y = dynamic_y;
           area.w = lcd.xres - value_x;
           area.h = dynamic_h;
-          (void)ioctl(lcd.fd, FBIO_UPDATE,
+          ret = ioctl(lcd.fd, FBIO_UPDATE,
                       (unsigned long)(uintptr_t)&area);
+          if (ret < 0)
+            {
+              /* A failed partial update must not silently freeze the panel.
+               * Retry once through the normal full-frame path. */
+              (void)hs_lcd_flush(&lcd);
+            }
 #else
           hs_lcd_flush(&lcd);
 #endif
         }
       tick++;
-      usleep(200000);
+      usleep(100000);
     }
 
 out:
@@ -1554,6 +1814,151 @@ out:
   return ret;
 }
 
+/* Full scan of both I2C buses.  Deliberately kept out of the display loop:
+ * every absent address in a 0x08-0x77 sweep costs an I2C timeout, which
+ * would stall the panel for many seconds. */
+
+static int hs_demo_i2cscan(void)
+{
+  struct hs_i2c_s bus = { .fd = -1 };
+  uint8_t found[32];
+  char line[128];
+  unsigned int busno;
+  int ret;
+
+  for (busno = 0; busno <= 1; busno++)
+    {
+      ret = hs_i2c_open(&bus, busno, HS_I2C_DEFAULT_FREQUENCY);
+      if (ret < 0)
+        {
+          printf("i2cscan: /dev/i2c%u open failed (%d)\n", busno, ret);
+          continue;
+        }
+
+      ret = hs_i2c_scan(&bus, found, (int)(sizeof(found) / sizeof(found[0])));
+      hs_i2c_format(line, sizeof(line), found, ret);
+      printf("i2cscan: bus %u -> %s\n", busno, line);
+      hs_i2c_close(&bus);
+    }
+
+  return 0;
+}
+
+/* Dump the pulse-oximeter register file and one FIFO burst.  This is the
+ * ground-truth probe for low-cost MAX30102-compatible parts: registers that
+ * stay 0x00 or a read that fails reveal a chip that does not implement the
+ * standard map. */
+
+static int hs_demo_max30102_regs(uint32_t frequency)
+{
+  struct hs_i2c_s bus = { .fd = -1 };
+  uint8_t regs[0x0c];
+  uint8_t fifo[6];
+  char line[64];
+  uint8_t reg;
+  int ret;
+  int i;
+
+  ret = hs_i2c_open(&bus, HS_MAX30102_I2C_BUS, frequency);
+  if (ret < 0)
+    {
+      printf("max30102_regs: /dev/i2c%u open failed (%d)\n",
+             HS_MAX30102_I2C_BUS, ret);
+      return ret;
+    }
+
+  printf("max30102_regs: bus frequency %lu Hz\n",
+         (unsigned long)bus.frequency);
+
+  memset(regs, 0, sizeof(regs));
+  for (i = 0; i <= 0x0b; i++)
+    {
+      uint8_t value = 0;
+
+      reg = (uint8_t)i;
+      ret = hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1,
+                              &value, 1);
+      regs[i] = (ret < 0) ? 0xee : value;
+    }
+
+  for (i = 0; i <= 0x0b; i += 4)
+    {
+      snprintf(line, sizeof(line), "max30102_regs: 0x%02x-0x%02x = %02x %02x "
+               "%02x %02x\n", i, i + 3, regs[i], regs[i + 1], regs[i + 2],
+               regs[i + 3]);
+      printf("%s", line);
+    }
+
+  memset(fifo, 0, sizeof(fifo));
+  reg = 0x07;
+  ret = hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1,
+                          fifo, sizeof(fifo));
+  printf("max30102_regs: fifo burst (0x07) ret=%d %02x %02x %02x %02x %02x "
+         "%02x\n", ret, fifo[0], fifo[1], fifo[2], fifo[3], fifo[4], fifo[5]);
+
+  /* A plain read (no register pointer) shows whether the part responds to a
+   * bare read transaction at all. */
+  {
+    uint8_t raw = 0;
+
+    ret = hs_i2c_read(&bus, HS_MAX30102_I2C_ADDRESS, &raw, 1);
+    printf("max30102_regs: bare read ret=%d value=0x%02x\n", ret, raw);
+  }
+
+  /* Write/read-back test: proves whether configuration writes actually land.
+   * Use registers that are not touched by the driver's init sequence. */
+  {
+    uint8_t wbuf[2];
+    uint8_t rb = 0;
+
+    wbuf[0] = 0x0b;   /* LED1_PA */
+    wbuf[1] = 0x55;
+    ret = hs_i2c_write(&bus, HS_MAX30102_I2C_ADDRESS, wbuf, sizeof(wbuf));
+    reg = 0x0b;
+    (void)hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1, &rb, 1);
+    printf("max30102_regs: write 0x0b=0x55 ret=%d readback=0x%02x\n", ret, rb);
+
+    wbuf[0] = 0x0d;   /* LED2_PA */
+    wbuf[1] = 0x66;
+    ret = hs_i2c_write(&bus, HS_MAX30102_I2C_ADDRESS, wbuf, sizeof(wbuf));
+    reg = 0x0d;
+    (void)hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1, &rb, 1);
+    printf("max30102_regs: write 0x0d=0x66 ret=%d readback=0x%02x\n", ret, rb);
+
+    /* Put the part into SpO2 mode and read the mode back. */
+    wbuf[0] = 0x09;
+    wbuf[1] = 0x03;
+    ret = hs_i2c_write(&bus, HS_MAX30102_I2C_ADDRESS, wbuf, sizeof(wbuf));
+    reg = 0x09;
+    (void)hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1, &rb, 1);
+    printf("max30102_regs: write 0x09=0x03 ret=%d readback=0x%02x\n", ret, rb);
+  }
+
+  /* FIFO pointers: two reads one second apart show whether the part is
+   * sampling.  Equal or static pointers explain missing samples. */
+  {
+    uint8_t wr1 = 0;
+    uint8_t rd1 = 0;
+    uint8_t wr2 = 0;
+    uint8_t rd2 = 0;
+
+    reg = 0x04;
+    (void)hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1, &wr1, 1);
+    reg = 0x06;
+    (void)hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1, &rd1, 1);
+    sleep(1);
+    reg = 0x04;
+    (void)hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1, &wr2, 1);
+    reg = 0x06;
+    (void)hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1, &rd2, 1);
+    printf("max30102_regs: wr_ptr %02x->%02x  rd_ptr %02x->%02x\n",
+           wr1, wr2, rd1, rd2);
+  }
+
+  hs_i2c_close(&bus);
+  return 0;
+}
+
 int huangshan_hal_demo_main(int argc, char *argv[])
 {
   const char *name;
@@ -1563,7 +1968,6 @@ int huangshan_hal_demo_main(int argc, char *argv[])
       hs_demo_help();
       return -EINVAL;
     }
-
   name = argv[1];
   if (strcmp(name, "i2c") == 0)
     {
@@ -1584,6 +1988,18 @@ int huangshan_hal_demo_main(int argc, char *argv[])
   if (strcmp(name, "vibration") == 0)
     {
       return hs_demo_vibration(argc > 2 ? argv[2] : NULL);
+    }
+  if (strcmp(name, "blehost") == 0)
+    {
+      return hs_demo_blehost(argc > 2 ? argv[2] : NULL);
+    }
+  if (strcmp(name, "bleevent") == 0)
+    {
+      return hs_demo_bleevent(argc, argv);
+    }
+  if (strcmp(name, "blestatus") == 0)
+    {
+      return hs_demo_blestatus();
     }
   if (strcmp(name, "imu") == 0)
     {
@@ -1616,6 +2032,21 @@ int huangshan_hal_demo_main(int argc, char *argv[])
   if (strcmp(name, "sysinfo") == 0)
     {
       return hs_demo_sysinfo();
+    }
+  if (strcmp(name, "i2cscan") == 0)
+    {
+      return hs_demo_i2cscan();
+    }
+  if (strcmp(name, "max30102_regs") == 0)
+    {
+      uint32_t frequency = HS_I2C_DEFAULT_FREQUENCY;
+
+      if (argc > 2)
+        {
+          frequency = (uint32_t)strtoul(argv[2], NULL, 0);
+        }
+
+      return hs_demo_max30102_regs(frequency);
     }
   if (strcmp(name, "gsr_once") == 0)
     {

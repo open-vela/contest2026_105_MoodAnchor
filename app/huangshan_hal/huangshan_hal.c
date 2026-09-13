@@ -225,14 +225,23 @@ int hs_max30102_open(struct hs_max30102_s *sensor, unsigned int busno)
       return ret;
     }
 
-  if (part_id != 0x15)
-    {
-      hs_max30102_close(sensor);
-      return -ENODEV;
-    }
+  sensor->part_id = part_id;
 
-  /* Reset, disable interrupts, clear FIFO pointers, then select SpO2 mode:
-   * 100 samples/s, 411 us pulse width, 4096 nA ADC range. */
+  /* A genuine MAX30102/MAX30105 reports 0x15 here, but many low-cost boards
+   * carry MAX30102-compatible parts whose ID registers stay 0x00 (or return a
+   * vendor value) while the standard register map still works.  Anything that
+   * acknowledges on the bus is therefore accepted; the ID is kept so callers
+   * can log it, and a mismatched revision register is tolerated as well. */
+  (void)hs_max30102_reg_read(sensor, 0xfe, &sensor->rev_id);
+
+  /* Reset, disable interrupts, clear FIFO pointers, then select SpO2 mode.
+   *
+   * Register 0x08 is FIFO_CONFIG (not FIFO_DATA).  The previous code wrote
+   * 0x4f to 0x07 and programmed 0x09/0x0a with swapped meanings, which could
+   * leave the part in multi-LED mode and produce only a startup sample.
+   * Use no averaging, no rollover, 100 samples/s, 411 us pulse width and the
+   * 4096 nA ADC range.  FIFO polling is intentional; INT may remain open.
+   */
   ret = hs_max30102_reg_write(sensor, 0x0a, 0x40);
   if (ret >= 0)
     {
@@ -245,11 +254,11 @@ int hs_max30102_open(struct hs_max30102_s *sensor, unsigned int busno)
   if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x04, 0x00);
   if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x05, 0x00);
   if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x06, 0x00);
-  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x07, 0x4f);
-  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x09, 0x27);
+  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x08, 0x0f);
+  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x09, 0x03);
+  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x0a, 0x27);
   if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x0c, 0x24);
   if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x0d, 0x24);
-  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x0a, 0x03);
   if (ret < 0)
     {
       hs_max30102_close(sensor);
@@ -1015,6 +1024,7 @@ int hs_ble_command(struct hs_ble_s *ble, uint16_t opcode,
 {
   uint8_t command[4 + 255];
   uint8_t header[3];
+  uint8_t payload[255];
   uint8_t payload_length;
   size_t total;
   int ret;
@@ -1040,38 +1050,53 @@ int hs_ble_command(struct hs_ble_s *ble, uint16_t opcode,
       return ret;
     }
 
-  ret = hs_read_full(ble->fd, header, sizeof(header));
-  if (ret < 0)
+  /* The controller may emit asynchronous LE events while a command is
+   * pending.  Consume complete H:4 event packets until the response for this
+   * opcode arrives, instead of treating the first event as the response. */
+  for (;;)
     {
-      return ret;
-    }
+      ret = hs_read_full(ble->fd, header, sizeof(header));
+      if (ret < 0)
+        {
+          return ret;
+        }
 
-  if (header[0] != 0x04)
-    {
-      return -EPROTO;
-    }
+      if (header[0] != 0x04)
+        {
+          return -EPROTO;
+        }
 
-  payload_length = header[2];
-  total = (size_t)payload_length + sizeof(header);
-  if (total > event_size)
-    {
-      return -EMSGSIZE;
-    }
+      payload_length = header[2];
+      ret = hs_read_full(ble->fd, payload, payload_length);
+      if (ret < 0)
+        {
+          return ret;
+        }
 
-  memcpy(event, header, sizeof(header));
-  ret = hs_read_full(ble->fd, (uint8_t *)event + sizeof(header),
-                     payload_length);
-  if (ret < 0)
-    {
-      return ret;
-    }
+      if ((header[1] == 0x0e && payload_length >= 4 &&
+           payload[1] == (opcode & 0xff) &&
+           payload[2] == (opcode >> 8)) ||
+          (header[1] == 0x0f && payload_length >= 4 &&
+           payload[2] == (opcode & 0xff) &&
+           payload[3] == (opcode >> 8)))
+        {
+          total = (size_t)payload_length + sizeof(header);
+          if (total > event_size)
+            {
+              return -EMSGSIZE;
+            }
 
-  if (event_length != NULL)
-    {
-      *event_length = total;
-    }
+          memcpy(event, header, sizeof(header));
+          memcpy((uint8_t *)event + sizeof(header), payload,
+                 payload_length);
+          if (event_length != NULL)
+            {
+              *event_length = total;
+            }
 
-  return 0;
+          return 0;
+        }
+    }
 }
 
 static int hs_ble_command_status(struct hs_ble_s *ble, uint16_t opcode,
@@ -1088,14 +1113,26 @@ static int hs_ble_command_status(struct hs_ble_s *ble, uint16_t opcode,
       return ret;
     }
 
-  /* Command Complete: 04 0e len 01 opcode-lo opcode-hi status ... */
-  if (length < 7 || event[1] != 0x0e || event[3] != 1 ||
-      event[4] != (opcode & 0xff) || event[5] != (opcode >> 8))
+  /* Command Complete: 04 0e len 01 opcode-lo opcode-hi status ...
+   * Command Status:   04 0f len status num opcode-lo opcode-hi */
+  if ((event[1] == 0x0e &&
+       (length < 7 || event[3] == 0 ||
+        event[4] != (opcode & 0xff) || event[5] != (opcode >> 8))) ||
+      (event[1] == 0x0f &&
+       (length < 7 || event[5] != (opcode & 0xff) ||
+        event[6] != (opcode >> 8))) ||
+      (event[1] != 0x0e && event[1] != 0x0f))
     {
+      printf("ble hci event mismatch op=0x%04x len=%lu evt=%02x data=%02x %02x %02x %02x\n",
+             opcode, (unsigned long)length, event[1], event[3], event[4],
+             event[5], event[6]);
       return -EPROTO;
     }
 
-  return event[6] == 0 ? 0 : -(EIO + event[6]);
+  {
+    uint8_t status = event[1] == 0x0f ? event[3] : event[6];
+    return status == 0 ? 0 : -(EIO + status);
+  }
 }
 
 int hs_ble_set_advertising_parameters(struct hs_ble_s *ble,
@@ -1172,22 +1209,31 @@ int hs_ble_advertise_name(struct hs_ble_s *ble, const char *name)
   ret = hs_ble_set_advertising(ble, false);
   if (ret < 0)
     {
+      printf("ble adv disable failed: %d\n", ret);
       return ret;
     }
 
   ret = hs_ble_set_advertising_parameters(ble, 0x00a0, 0x00a0);
   if (ret < 0)
     {
+      printf("ble adv params failed: %d\n", ret);
       return ret;
     }
 
   ret = hs_ble_set_advertising_data(ble, data, (uint8_t)(name_length + 5));
   if (ret < 0)
     {
+      printf("ble adv data failed: %d\n", ret);
       return ret;
     }
 
-  return hs_ble_set_advertising(ble, true);
+  ret = hs_ble_set_advertising(ble, true);
+  if (ret < 0)
+    {
+      printf("ble adv enable failed: %d\n", ret);
+    }
+
+  return ret;
 }
 
 int hs_ble_reset(struct hs_ble_s *ble)

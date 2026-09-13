@@ -1,4 +1,123 @@
-# contest2026_105_MoodAnchor
+# 黄山派 SF32LB52 硬件接口与驱动示例
+
+本作品以立创·黄山派（SiFli SF32LB52）为目标板，使用 openvela 官方
+`vendor_sifli` 的 `dev-ai-contest-2026` BSP，并在 `app/huangshan_hal/`
+提供统一的 I2C、ADC、PWM、LCD 和 BLE H:4 接口函数以及 `huangshan_hal_demo`
+命令。底层芯片寄存器、时钟、Pinmux、LCD CO5300、FT6146 和蓝牙控制器驱动
+来自官方 BSP，不在本仓库复制或改写。
+
+## 接口位置
+
+```text
+app/huangshan_hal/huangshan_hal.h  # 应用接口声明
+app/huangshan_hal/huangshan_hal.c  # NuttX 设备节点封装
+app/huangshan_hal/huangshan_hal_demo.c
+```
+
+默认设备节点为 `/dev/i2c0`、`/dev/i2c1`、`/dev/adc0`（VBAT）、`/dev/adc1`
+（Grove GSR/PA28）、`/dev/pwm0`、
+`/dev/fb0`；启用 `LVX_USE_HUANGSHAN_HAL` 后，Kconfig 会打开官方 H:4
+伪设备并提供 `/dev/ttyHCI0`。所有接口失败时返回负的 errno 值。
+
+| 模块 | 主要函数 |
+|---|---|
+| I2C | `hs_i2c_open`、`hs_i2c_write`、`hs_i2c_read`、`hs_i2c_write_read` |
+| ADC | `hs_adc_open`、`hs_adc_read` |
+| PWM | `hs_pwm_open`、`hs_pwm_set`、`hs_pwm_stop` |
+| LCD | `hs_lcd_open`、`hs_lcd_pixel`、`hs_lcd_fill`、`hs_lcd_flush` |
+| BLE H:4 | `hs_ble_open`、`hs_ble_reset`、`hs_ble_command` |
+
+BLE 的 `hs_ble_*` 是控制器 H:4 传输接口；完整 GAP/GATT 应交给 openvela
+Bluetooth Host/framework。若 Host 已启用并占用 `/dev/ttyHCI0`，应用不要再
+直接打开该节点，应使用 Host 的 GATT/GAP API。
+
+## 官方 BSP 依赖
+
+黄山派适配位于：
+
+```text
+open-vela/vendor_sifli
+分支：dev-ai-contest-2026
+目录：boards/sf32lb52/lckfb_huangshan_pi
+```
+
+`openvela.xml` 已声明 `vendor/sifli` 项目。`nuttx` 与 `vendor_sifli` 必须
+同时使用 `dev-ai-contest-2026` 分支。
+
+## 编译
+
+推荐使用仓内脚本完成准备和编译（默认走已验证的 Make 入口，
+产物为 `nuttx/nuttx.bin`）：
+
+```bash
+OPENVELA_ROOT=/path/to/openvela scripts/build_huangshan.sh
+```
+
+脚本会先运行 `scripts/prepare_huangshan.sh`，补齐 Make 构建兼容层、
+板级源文件、LittleFS 和 defconfig。若要使用 CMake 构建，设置
+`HS_USE_CMAKE=1`，或在 openvela 工作区根目录手动执行：
+
+```bash
+cmake -B cmake_out/lckfb_huangshan_pi \
+  -S "$PWD/nuttx" -GNinja \
+  -DBOARD_CONFIG=../vendor/sifli/boards/sf32lb52/lckfb_huangshan_pi/configs/nsh \
+  -DEXTRA_FLAGS="-Wno-cpp -Wno-deprecated-declarations"
+cmake --build cmake_out/lckfb_huangshan_pi
+```
+
+需要在 `menuconfig` 中启用 `LVX_USE_HUANGSHAN_HAL` 才会编译演示命令
+（`prepare_huangshan.sh` 已默认启用）。
+
+官方黄山派配置已经启用 ADC、I2C、PWM、LCD/FB 和 Bluetooth HCI。应用
+映射由本仓 manifest 自动完成：
+
+```text
+app/huangshan_hal/
+  -> packages/demos/contest2026_105_huangshan_hal
+```
+
+## 烧录与验证
+
+Make 构建生成的镜像为 `nuttx/nuttx.bin`（CMake 构建产物在
+`cmake_out/lckfb_huangshan_pi/nuttx.bin`），烧录偏移为 `0x12010000`：
+
+```bash
+sftool -c SF32LB52 -p /dev/ttyUSB0 -b 1000000 \
+  --before default_reset --after soft_reset \
+  write_flash nuttx/nuttx.bin@0x12010000
+```
+
+串口使用 1,000,000 8N1；推荐：
+
+```bash
+picocom -b 1000000 --noreset --lower-rts --lower-dtr /dev/ttyUSB0
+```
+
+在 `nsh>` 中：
+
+```text
+ls /dev
+huangshan_hal_demo i2c
+huangshan_hal_demo adc
+huangshan_hal_demo gsr_once
+huangshan_hal_demo gsr_cal 30
+huangshan_hal_demo gsr_stream <CAL_RAW10>
+huangshan_hal_demo pwm
+huangshan_hal_demo lcd
+huangshan_hal_demo ble
+huangshan_hal_demo ble_adv HuangshanPi
+```
+
+I2C demo 访问触摸 FT6146（I2C0/0x38），ADC demo 读取通道 0，PWM demo
+在 `/dev/pwm0` 输出 1 kHz/50%，LCD demo 将 CO5300 framebuffer 填蓝，BLE
+demo 对 HCI 控制器发送 Reset，`ble_adv` 还会启用可被手机扫描的 BLE 广播。
+这两个命令只能在 Bluetooth Host 未占用 `/dev/ttyHCI0` 时使用；生产应用应
+使用 openvela Bluetooth Host/framework 创建 GATT 服务。具体接线、GPIO 和已知限制以官方
+`vendor/sifli/boards/sf32lb52/lckfb_huangshan_pi/README_zh-cn.md` 为准。
+
+---
+
+以下是比赛模板原始说明，保留用于仓库同步和提交规范。
 
 👋 欢迎参加 **2026 首届 openvela AI 硬件开发者大赛**！
 
@@ -33,10 +152,19 @@
 用组委会提供的命令一键拉取「openvela 全量源码 + 你的专属仓」：
 
 ```bash
-repo init -u https://github.com/open-vela/contest2026_105_MoodAnchor \
+repo init -u <组委会提供的 manifest 仓库地址> \
   -b dev-ai-contest-2026 -m contest2026_105_MoodAnchor.xml
 repo sync -c -j8
 ```
+
+官网文档中的 `<manifest 仓库地址>` 是每支队伍专属的地址，不一定等于本
+仓库的 GitHub fork 地址。拿到该地址后，也可以直接运行：
+
+```bash
+scripts/sync_openvela.sh <manifest-url> contest2026_105_MoodAnchor.xml /path/to/openvela
+```
+
+完整 repo sync 后运行 `scripts/prepare_huangshan.sh`，即可把 `nuttx/`、`apps/`、`vendor/` 等源码准备到可编译状态；官方源仓和 LittleFS 下载需要网络，脚本会在下载失败时明确报错。
 
 同步后，你的整个仓库位于工作区的 `contest2026_105_MoodAnchor/`，openvela 全量源码在外层（`nuttx/`、`apps/`、`packages/`、`vendor/` 等）。
 

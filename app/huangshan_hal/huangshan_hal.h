@@ -71,6 +71,11 @@ struct hs_max30102_s
 {
   struct hs_i2c_s i2c;
   uint8_t address;
+  /* PART_ID read from register 0xff at open time.  0x15 identifies a genuine
+   * MAX30102/MAX30105; low-cost MAX30102-compatible parts often report 0x00
+   * or a vendor value while still decoding the standard register map. */
+  uint8_t part_id;
+  uint8_t rev_id;
   bool initialized;
 };
 
