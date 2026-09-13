@@ -37,6 +37,7 @@
 #include <nuttx/wireless/bluetooth/bt_driver.h>
 #include <nuttx/wireless/bluetooth/bt_hci.h>
 #include <nuttx/wireless/bluetooth/bt_uart.h>
+#include <nuttx/mutex.h>
 
 #include "huangshan_hal.h"
 #include "hs_ble.h"
@@ -89,6 +90,12 @@ static struct hs_ble_h4_s g_h4 =
 
 static bool     g_host_started;
 static bool     g_host_ready;
+
+/* Serializes hs_ble_host_start() across the UI worker and CLI callers.
+ * Without it, two concurrent bt_netdev_register() runs corrupt the shared
+ * HCI state (double free in bt_buf.c, ASSERT at POOL_BUFFER_DYNAMIC).
+ */
+static mutex_t  g_host_lock = NXMUTEX_INITIALIZER;
 
 static uint8_t  g_bdaddr[6];
 static bool     g_bdaddr_valid;
@@ -327,6 +334,22 @@ static FAR void *hs_ble_h4_rxthread(FAR void *arg)
           continue;
         }
 
+      if (type == BT_ACL_IN || type == BT_ISO_IN)
+        {
+          /* NuttX expects the ACL/ISO header (handle + data length, the
+           * 4 bytes after the H:4 type byte) followed by the payload.
+           * Passing only the payload made hci_acl() parse garbage handles,
+           * drop every L2CAP/ATT/SMP packet and time out the phone.
+           */
+          uint8_t acl[HS_BLE_H4_BUFSIZE + 4];
+
+          memcpy(acl, &hdr[1], 4);
+          memcpy(&acl[4], pkt, plen);
+
+          priv->drv.receive(&priv->drv, type, acl, plen + 4);
+          continue;
+        }
+
       priv->drv.receive(&priv->drv, type, pkt, plen);
     }
 
@@ -518,13 +541,17 @@ int hs_ble_host_start(void)
   int ret;
   int attempt;
 
+  nxmutex_lock(&g_host_lock);
+
   if (g_host_ready)
     {
+      nxmutex_unlock(&g_host_lock);
       return OK;
     }
 
   if (g_host_started)
     {
+      nxmutex_unlock(&g_host_lock);
       return -EALREADY;
     }
 
@@ -577,10 +604,12 @@ int hs_ble_host_start(void)
   if (ret < 0)
     {
       g_host_started = false;
+      nxmutex_unlock(&g_host_lock);
       return ret;
     }
 
   g_host_ready = true;
+  nxmutex_unlock(&g_host_lock);
   printf("[BLE] NuttX host stack up, controller initialised\n");
   return OK;
 }
