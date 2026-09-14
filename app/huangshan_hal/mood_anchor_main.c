@@ -1217,19 +1217,20 @@ static void ma_mic_timer(lv_timer_t *timer)
 
   level = hs_mic_level();
 
-  /* Instant attack, slow release.  A needle that tracks the block-by-block
-   * figure exactly jitters like noise; this is the ballistic that makes it
-   * read as a level instead.  The release takes about two seconds, which is
-   * the usual feel for a sound level meter.
+  /* Mild symmetric smoothing.  Asymmetric ballistics were tried here first -
+   * instant attack with a slow release - and they are wrong for a loudness
+   * readout: such a filter follows the peaks of speech rather than its
+   * average, so ordinary conversation pins the scale.  This only takes the
+   * jitter out, and the reading still means "how loud, on average".
    */
 
-  if (level > shown)
+  if (shown < 0)
     {
       shown = level;
     }
-  else if (shown > level)
+  else
     {
-      shown -= (shown - level + 7) / 8;
+      shown += (level - shown) / 4;
     }
 
   /* Peak hold: jump to a new maximum, then fall back one step per tick, so a
