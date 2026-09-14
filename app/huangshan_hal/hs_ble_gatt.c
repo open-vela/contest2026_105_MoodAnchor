@@ -589,25 +589,23 @@ static int hs_ble_write_control(FAR struct bt_conn_s *conn,
       switch (g_ctrl[0])
         {
           case HS_BLE_CTL_ACK:
-            printf("[BLE] phone ack, last seq=%u\n", g_event_seq);
+            /* The phone acknowledged the last event.  Nothing to do while
+             * notifications are fire-and-forget; a retry policy would hook
+             * in here. */
             break;
 
           case HS_BLE_CTL_CLEAR:
             memset(g_event_pkt, 0, sizeof(g_event_pkt));
-            printf("[BLE] phone cleared the pending event\n");
             break;
 
           case HS_BLE_CTL_INTERVAL:
             if (len >= 2)
               {
                 g_report_period = g_ctrl[1];
-                printf("[BLE] report period set to %u s\n", g_report_period);
               }
             break;
 
           default:
-            printf("[BLE] control write: opcode 0x%02x len %u\n",
-                   g_ctrl[0], (unsigned)len);
             break;
         }
     }

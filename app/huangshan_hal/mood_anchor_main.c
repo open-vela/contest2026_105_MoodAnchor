@@ -158,6 +158,24 @@ static void ma_ble_stop(void);
  *
  ****************************************************************************/
 
+/****************************************************************************
+ * Name: ma_log_silent
+ *
+ * Description:
+ *   LVGL writes its log straight to the 1 Mbps console from the render
+ *   thread.  A single line costs about a millisecond, the console port is
+ *   not reentrant, and the UI visibly stutters while it is busy.  The
+ *   diagnostics that matter are printed by the application itself, so drop
+ *   the LVGL channel completely.
+ *
+ ****************************************************************************/
+
+static void ma_log_silent(lv_log_level_t level, const char *buf)
+{
+  (void)level;
+  (void)buf;
+}
+
 static lv_obj_t *ma_create_card(lv_obj_t *parent, lv_coord_t height)
 {
   lv_obj_t *card = lv_obj_create(parent);
@@ -321,12 +339,10 @@ static void ma_ble_switch_event(lv_event_t *event)
 
   if (lv_obj_has_state(sw, LV_STATE_CHECKED))
     {
-      printf("MoodAnchor: BLE switch ON\n");
       ma_ble_start_async();
     }
   else
     {
-      printf("MoodAnchor: BLE switch OFF\n");
       ma_ble_stop();
     }
 }
@@ -342,12 +358,31 @@ static void ma_ble_switch_event(lv_event_t *event)
 
 static void ma_refresh_ble_ui(void)
 {
-  int state = g_ble_state;
+  static int  last_state = -1;
+  static bool last_peer;
+  bool        peer;
+  int         state = g_ble_state;
 
   if (g_lbl_ble_state == NULL)
     {
       return;
     }
+
+  peer = hs_ble_gatt_peer_connected();
+
+  /* lv_label_set_text_fmt() reallocates the string and invalidates the
+   * widget on every call, even when the resulting text is identical.  This
+   * runs 2x per second, so leave the widgets alone unless the state machine
+   * really moved.
+   */
+
+  if (state == last_state && peer == last_peer)
+    {
+      return;
+    }
+
+  last_state = state;
+  last_peer  = peer;
 
   switch (state)
     {
@@ -362,7 +397,7 @@ static void ma_refresh_ble_ui(void)
         lv_label_set_text(g_lbl_ble_state, "ON");
         lv_obj_set_style_text_color(g_lbl_ble_state, lv_color_hex(MA_COLOR_ACCENT),
                                     0);
-        if (!hs_ble_gatt_peer_connected())
+        if (!peer)
           {
             lv_label_set_text_fmt(g_lbl_ble_info,
                                   "Advertising as %s\nwaiting for a phone",
@@ -516,6 +551,9 @@ static void ma_tileview_event(lv_event_t *event)
 
 static void ma_read_gsr(void)
 {
+  static int32_t  last_mv   = -1;
+  static int32_t  last_mood = -1;
+  static uint32_t last_raw  = 0xffffffffu;
   struct hs_gsr_sample_s sample;
   int32_t mood;
 
@@ -542,8 +580,6 @@ static void ma_read_gsr(void)
   g_ble_gsr_mv = sample.adc_mv;
   g_ble_gsr_ok = 1;
 
-  lv_label_set_text_fmt(g_lbl_gsr_mv, "%" PRId32 " mV", g_gsr_mv);
-
   /* Very simple mapping: the Grove GSR output sits near mid scale when the
    * electrodes are relaxed and rises with arousal.  This is a display
    * helper, the real calibration lives in the GSR HAL.
@@ -560,6 +596,21 @@ static void ma_read_gsr(void)
       mood = 100;
     }
 
+  /* A resting GSR trace repeats the same reading for many consecutive
+   * samples and lv_label_set_text_fmt() reallocates + invalidates on every
+   * call, so skip the update when nothing moved.
+   */
+
+  if (g_gsr_mv == last_mv && mood == last_mood && sample.raw10 == last_raw)
+    {
+      return;
+    }
+
+  last_mv   = g_gsr_mv;
+  last_mood = mood;
+  last_raw  = sample.raw10;
+
+  lv_label_set_text_fmt(g_lbl_gsr_mv, "%" PRId32 " mV", g_gsr_mv);
   lv_label_set_text_fmt(g_lbl_mood_value, "%" PRId32, mood);
   lv_label_set_text_fmt(g_lbl_mood_state, "GSR %" PRId32 " mV  (raw %u)",
                         g_gsr_mv, sample.raw10);
@@ -571,6 +622,10 @@ static void ma_read_gsr(void)
 
 static void ma_read_vitals(void)
 {
+  static uint32_t last_hr   = 0xffffffffu;
+  static uint32_t last_spo2 = 0xffffffffu;
+  static uint32_t last_red  = 0xffffffffu;
+  static uint32_t last_ir   = 0xffffffffu;
   struct hs_max30102_sample_s sample;
 
   if (!g_max_open)
@@ -620,6 +675,20 @@ static void ma_read_vitals(void)
   g_ble_spo2 = (uint8_t)g_spo2;
   g_ble_vitals_ok = 1;
 
+  /* Same reasoning as the GSR path: skip the reallocating label updates
+   * while the sample does not actually move. */
+
+  if (g_hr_bpm == last_hr && g_spo2 == last_spo2 &&
+      sample.red == last_red && sample.ir == last_ir)
+    {
+      return;
+    }
+
+  last_hr   = g_hr_bpm;
+  last_spo2 = g_spo2;
+  last_red  = sample.red;
+  last_ir   = sample.ir;
+
   lv_label_set_text_fmt(g_lbl_hr, "%" PRIu32 " bpm", g_hr_bpm);
   lv_label_set_text_fmt(g_lbl_spo2, "%" PRIu32 " %%", g_spo2);
   lv_label_set_text_fmt(g_lbl_vitals_note, "RED %" PRIu32 "  IR %" PRIu32,
@@ -632,6 +701,7 @@ static void ma_read_vitals(void)
 
 static void ma_read_motion(void)
 {
+  static uint32_t imu_tick;
   struct hs_imu_sample_s sample;
 
   if (!g_imu_open)
@@ -648,6 +718,16 @@ static void ma_read_motion(void)
   if (hs_imu_read(&g_imu, &sample) < 0)
     {
       lv_label_set_text(g_lbl_accel, "read error");
+      return;
+    }
+
+  /* The raw IMU values change on every sample, so redrawing them at the full
+   * refresh rate is pure waste.  Show every other sample (about 1 Hz) which
+   * is more than enough for a motion readout.
+   */
+
+  if ((imu_tick++ & 1u) != 0)
+    {
       return;
     }
 
@@ -995,6 +1075,12 @@ int main(int argc, FAR char *argv[])
 
   (void)argc;
   (void)argv;
+
+  /* LVGL logs go straight to the 1 Mbps console from inside the render
+   * thread; silence them, the application prints its own state changes.
+   */
+
+  lv_log_register_print_cb(ma_log_silent);
 
   lv_init();
 
