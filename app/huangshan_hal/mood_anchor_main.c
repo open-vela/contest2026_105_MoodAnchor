@@ -34,6 +34,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <lvgl/lvgl.h>
@@ -50,11 +51,17 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define MA_PAGE_MOOD       0
-#define MA_PAGE_VITALS     1
-#define MA_PAGE_MOTION     2
-#define MA_PAGE_LINK       3
-#define MA_PAGE_COUNT      4
+/* Page order.  The system page comes first: when something misbehaves the
+ * battery state and the sensor inventory are then one swipe away instead of
+ * requiring a serial console.
+ */
+
+#define MA_PAGE_SYSTEM     0
+#define MA_PAGE_BLE        1
+#define MA_PAGE_GSR        2
+#define MA_PAGE_PPG        3
+#define MA_PAGE_IMU        4
+#define MA_PAGE_COUNT      5
 
 #define MA_REFRESH_MS      500
 
@@ -77,6 +84,18 @@ static lv_obj_t *g_dots[MA_PAGE_COUNT];
 static lv_obj_t *g_lbl_mood_value;
 static lv_obj_t *g_lbl_mood_state;
 static lv_obj_t *g_lbl_gsr_mv;
+
+/* System page (battery + sensor inventory) */
+
+static lv_obj_t *g_lbl_batt_mv;
+static lv_obj_t *g_lbl_sensors;
+
+/* Latest battery reading in millivolts.  The UI timer owns the ADC and
+ * publishes it here; the BLE data thread only maps it to a percentage, so
+ * the two never race on the same handle.
+ */
+
+static volatile int32_t g_vbat_mv;
 
 /* Vitals page */
 
@@ -256,6 +275,39 @@ static void ma_create_page_header(lv_obj_t *tile, const char *title)
   lv_obj_set_style_text_color(lbl, lv_color_hex(MA_COLOR_TEXT), 0);
   lv_obj_set_style_text_font(lbl, &lv_font_montserrat_20, 0);
   lv_obj_align(lbl, LV_ALIGN_TOP_MID, 0, 4);
+}
+
+/****************************************************************************
+ * Name: ma_build_system_page
+ *
+ * Description:
+ *   First page: the battery reading and the presence of every sensor the
+ *   application depends on.
+ *
+ ****************************************************************************/
+
+static void ma_build_system_page(lv_obj_t *tile)
+{
+  lv_obj_t *card;
+
+  ma_create_page_header(tile, "SYSTEM");
+
+  card = ma_create_card(tile, 120);
+  lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 44);
+  ma_create_caption(card, "Battery (VBATS)");
+  g_lbl_batt_mv = ma_create_value(card, "-- V", &lv_font_montserrat_48,
+                                  MA_COLOR_ACCENT);
+
+  card = ma_create_card(tile, 200);
+  lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 176);
+  ma_create_caption(card, "Sensors");
+  g_lbl_sensors = lv_label_create(card);
+  lv_obj_set_style_text_color(g_lbl_sensors, lv_color_hex(MA_COLOR_TEXT), 0);
+  lv_obj_set_style_text_font(g_lbl_sensors, &lv_font_montserrat_16, 0);
+  lv_label_set_long_mode(g_lbl_sensors, LV_LABEL_LONG_WRAP);
+  lv_obj_set_width(g_lbl_sensors, LV_PCT(100));
+  lv_obj_align(g_lbl_sensors, LV_ALIGN_TOP_LEFT, 0, 26);
+  lv_label_set_text(g_lbl_sensors, "probing...");
 }
 
 /****************************************************************************
@@ -581,6 +633,125 @@ static void ma_tileview_event(lv_event_t *event)
 }
 
 /****************************************************************************
+ * Name: ma_node_present
+ *
+ * Description:
+ *   True when the device node exists.  The system page uses this to report
+ *   the sensor inventory without opening a handle that another thread owns.
+ *
+ ****************************************************************************/
+
+static bool ma_node_present(const char *path)
+{
+  struct stat st;
+
+  return path != NULL && stat(path, &st) == 0;
+}
+
+/****************************************************************************
+ * Name: ma_state_text
+ ****************************************************************************/
+
+static const char *ma_state_text(bool node, bool active)
+{
+  if (!node)
+    {
+      return "NO NODE";
+    }
+
+  return active ? "OK" : "IDLE";
+}
+
+/****************************************************************************
+ * Name: ma_update_battery
+ *
+ * Description:
+ *   Refresh g_vbat_mv.  This is the only place that touches the VBAT ADC:
+ *   the BLE data thread now reads the published value instead of opening
+ *   the device itself.  Both used to issue their own reset/trigger/read
+ *   sequence on the same node, which disturbed each other's conversion.
+ *
+ *   VBATS is the module input described as "battery voltage sense" in the
+ *   board pinout; it follows the battery and is clamped by the charger while
+ *   USB is attached, so the reading is only meaningful on battery power.
+ *
+ ****************************************************************************/
+
+static void ma_update_battery(void)
+{
+  int32_t mv = 0;
+
+  if (!g_batt_open && hs_adc_open(&g_batt, HS_ADC_DEVICE) < 0)
+    {
+      return;
+    }
+
+  g_batt_open = true;
+
+  if (hs_adc_read(&g_batt, HS_ADC_VBAT_CHANNEL, &mv) < 0 || mv <= 0)
+    {
+      return;
+    }
+
+  g_vbat_mv = mv;
+}
+
+/****************************************************************************
+ * Name: ma_read_system
+ ****************************************************************************/
+
+static void ma_read_system(void)
+{
+  static int32_t last_batt      = -1;
+  static char    last_list[256] = "";
+  char           buf[256];
+  int32_t        mv = g_vbat_mv;
+
+  if (mv > 0)
+    {
+      if (mv != last_batt)
+        {
+          last_batt = mv;
+          lv_label_set_text_fmt(g_lbl_batt_mv, "%d.%02d V", (int)(mv / 1000),
+                                (int)((mv % 1000) / 10));
+        }
+    }
+  else if (last_batt != 0)
+    {
+      last_batt = 0;
+      lv_label_set_text(g_lbl_batt_mv, "-- V");
+    }
+
+  /* Two sources of truth: whether the node exists, and whether the sampling
+   * path has ever produced data.  A node that exists but never delivers a
+   * sample is exactly the case this page has to make visible.
+   */
+
+  snprintf(buf, sizeof(buf),
+           "GSR     %-8s %s\n"
+           "PPG     %-8s %s\n"
+           "IMU     %-8s %s\n"
+           "BUTTON  %-8s %s\n"
+           "MOTOR   %-8s %s\n"
+           "TOUCH   %-8s %s",
+           "adc1", ma_state_text(ma_node_present(HS_ADC_GSR_DEVICE),
+                                 g_gsr_valid),
+           "i2c1", ma_state_text(true, g_ppg_state == MA_PPG_OK),
+           "lsm6d", ma_state_text(ma_node_present("/dev/lsm6dsl0"),
+                                  g_imu_open),
+           "btn", ma_state_text(ma_node_present(HS_BUTTONS_DEVICE),
+                                g_btn_open),
+           "gpio3", ma_state_text(ma_node_present("/dev/gpio3"), false),
+           "input0", ma_state_text(ma_node_present("/dev/input0"), true));
+
+  if (strcmp(buf, last_list) != 0)
+    {
+      memcpy(last_list, buf, sizeof(last_list));
+      lv_label_set_text(g_lbl_sensors, buf);
+    }
+}
+
+/****************************************************************************
  * Name: ma_read_gsr
  ****************************************************************************/
 
@@ -766,17 +937,26 @@ static void ma_refresh_timer(lv_timer_t *timer)
 
   (void)timer;
 
+  /* The battery is sampled unconditionally: the BLE status characteristic
+   * carries it, and that has to keep working whatever page is on screen.
+   */
+
+  ma_update_battery();
   ma_refresh_ble_ui();
 
-  if (tile == NULL || tile == g_tiles[MA_PAGE_MOOD])
+  if (tile == NULL || tile == g_tiles[MA_PAGE_SYSTEM])
+    {
+      ma_read_system();
+    }
+  else if (tile == g_tiles[MA_PAGE_GSR])
     {
       ma_read_gsr();
     }
-  else if (tile == g_tiles[MA_PAGE_VITALS])
+  else if (tile == g_tiles[MA_PAGE_PPG])
     {
       ma_read_vitals();
     }
-  else
+  else if (tile == g_tiles[MA_PAGE_IMU])
     {
       ma_read_motion();
     }
@@ -984,26 +1164,23 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
             }
         }
 
-      /* Battery: VBAT ADC channel, only reported as a coarse percentage. */
+      /* Battery: the UI timer owns the ADC and publishes the reading in
+       * g_vbat_mv, so this thread only has to map it to a percentage.  It
+       * used to trigger its own conversion on the same node, which
+       * disturbed the UI's and vice versa.
+       */
 
-      if (g_batt_open || hs_adc_open(&g_batt, HS_ADC_DEVICE) >= 0)
+      if (g_vbat_mv > 0)
         {
-          int32_t mv = 0;
+          /* 3.3 V .. 4.2 V mapped to 0..100 % */
 
-          g_batt_open = true;
+          int32_t pct = ((int32_t)g_vbat_mv - 3300) * 100 / 900;
 
-          if (hs_adc_read(&g_batt, HS_ADC_VBAT_CHANNEL, &mv) >= 0 && mv > 0)
-            {
-              /* 3.3 V .. 4.2 V mapped to 0..100 % */
+          if (pct < 0)   { pct = 0; }
+          if (pct > 100) { pct = 100; }
 
-              int32_t pct = (mv - 3300) * 100 / 900;
-
-              if (pct < 0)   { pct = 0; }
-              if (pct > 100) { pct = 100; }
-
-              battery  = (uint8_t)pct;
-              sflags  |= HS_BLE_STATUS_BAT_VALID;
-            }
+          battery  = (uint8_t)pct;
+          sflags  |= HS_BLE_STATUS_BAT_VALID;
         }
 
       vib = false;
@@ -1274,10 +1451,11 @@ int main(int argc, FAR char *argv[])
       lv_obj_set_style_border_width(g_tiles[i], 0, 0);
     }
 
-  ma_build_mood_page(g_tiles[MA_PAGE_MOOD]);
-  ma_build_vitals_page(g_tiles[MA_PAGE_VITALS]);
-  ma_build_motion_page(g_tiles[MA_PAGE_MOTION]);
-  ma_build_link_page(g_tiles[MA_PAGE_LINK]);
+  ma_build_system_page(g_tiles[MA_PAGE_SYSTEM]);
+  ma_build_link_page(g_tiles[MA_PAGE_BLE]);
+  ma_build_mood_page(g_tiles[MA_PAGE_GSR]);
+  ma_build_vitals_page(g_tiles[MA_PAGE_PPG]);
+  ma_build_motion_page(g_tiles[MA_PAGE_IMU]);
   ma_build_nav(screen);
 
   lv_timer_create(ma_refresh_timer, MA_REFRESH_MS, NULL);
