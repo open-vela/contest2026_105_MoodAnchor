@@ -50,6 +50,7 @@
 #include "huangshan_hal.h"
 #include "hs_ble.h"
 #include "hs_ppg.h"
+#include "hs_mic.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -120,6 +121,15 @@ static lv_obj_t *g_lbl_gsr_band;
 static lv_obj_t *g_lbl_batt_mv;
 static lv_obj_t *g_lbl_batt_note;
 static lv_obj_t *g_lbl_sensors;
+
+/* Microphone loudness.  The bar carries a relative 0..100 figure: bias,
+ * sensitivity and gain vary between units, so the number is only meaningful
+ * against its own recent history, not as a sound pressure level.
+ */
+
+static lv_obj_t *g_mic_bar;
+static lv_obj_t *g_lbl_mic;
+static volatile bool g_mic_ok;
 
 /* Latest battery reading in millivolts.  The UI timer owns the ADC and
  * publishes it here; the BLE data thread only maps it to a percentage, so
@@ -192,6 +202,7 @@ static pthread_t        g_ppg_thread;
 
 static volatile bool    g_sys_run;
 static pthread_t        g_sys_thread;
+static pthread_t        g_mic_thread;
 
 /* Latest samples */
 
@@ -374,6 +385,29 @@ static void ma_build_system_page(lv_obj_t *tile)
   lv_obj_set_width(g_lbl_sensors, LV_PCT(100));
   lv_obj_align(g_lbl_sensors, LV_ALIGN_TOP_LEFT, 0, 26);
   lv_label_set_text(g_lbl_sensors, "probing...");
+
+  /* Loudness row, pinned to the bottom of the same card.  Anchoring rather
+   * than using a fixed offset keeps the layout independent of the panel
+   * height, which the rest of the page already relies on.
+   */
+
+  g_mic_bar = lv_bar_create(card);
+  lv_obj_set_size(g_mic_bar, LV_PCT(66), 12);
+  lv_obj_align(g_mic_bar, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+  lv_bar_set_range(g_mic_bar, 0, 100);
+  lv_bar_set_value(g_mic_bar, 0, LV_ANIM_OFF);
+  lv_obj_set_style_radius(g_mic_bar, 6, 0);
+  lv_obj_set_style_bg_color(g_mic_bar, lv_color_hex(MA_COLOR_MUTED), 0);
+  lv_obj_set_style_bg_opa(g_mic_bar, LV_OPA_30, 0);
+  lv_obj_set_style_bg_color(g_mic_bar, lv_color_hex(MA_COLOR_ACCENT),
+                            LV_PART_INDICATOR);
+  lv_obj_set_style_bg_opa(g_mic_bar, LV_OPA_COVER, LV_PART_INDICATOR);
+
+  g_lbl_mic = lv_label_create(card);
+  lv_obj_set_style_text_color(g_lbl_mic, lv_color_hex(MA_COLOR_MUTED), 0);
+  lv_obj_set_style_text_font(g_lbl_mic, &lv_font_montserrat_16, 0);
+  lv_obj_align(g_lbl_mic, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+  lv_label_set_text(g_lbl_mic, "MIC");
 }
 
 /****************************************************************************
@@ -895,6 +929,101 @@ static void ma_sys_start(void)
     }
 
   pthread_attr_destroy(&attr);
+}
+
+/****************************************************************************
+ * Name: ma_mic_thread
+ *
+ * Description:
+ *   Drain the microphone DMA.  One block is 32 ms, so the service call has
+ *   to come round faster than that or blocks are missed; the UI is updated
+ *   separately at a much lower rate.
+ *
+ ****************************************************************************/
+
+static FAR void *ma_mic_thread(FAR void *arg)
+{
+  (void)arg;
+
+  if (hs_mic_start() < 0)
+    {
+      printf("mood: microphone unavailable\n");
+      return NULL;
+    }
+
+  g_mic_ok = true;
+  printf("mood: microphone started\n");
+
+  while (g_sys_run)
+    {
+      hs_mic_service();
+      usleep(20000);
+    }
+
+  hs_mic_stop();
+  g_mic_ok = false;
+  return NULL;
+}
+
+/****************************************************************************
+ * Name: ma_mic_start
+ ****************************************************************************/
+
+static void ma_mic_start(void)
+{
+  pthread_attr_t attr;
+
+  if (pthread_attr_init(&attr) != 0)
+    {
+      return;
+    }
+
+  pthread_attr_setstacksize(&attr, 3072);
+
+  if (pthread_create(&g_mic_thread, &attr, ma_mic_thread, NULL) == 0)
+    {
+      pthread_detach(g_mic_thread);
+    }
+
+  pthread_attr_destroy(&attr);
+}
+
+/****************************************************************************
+ * Name: ma_mic_timer
+ *
+ * Description:
+ *   Refresh the loudness bar.  Only touched when the rounded figure actually
+ *   changes, so a steady room costs no redraws at all.
+ *
+ ****************************************************************************/
+
+static void ma_mic_timer(lv_timer_t *timer)
+{
+  static int last = -1;
+  int level;
+
+  (void)timer;
+
+  if (!g_mic_ok)
+    {
+      if (last != -2)
+        {
+          last = -2;
+          lv_label_set_text(g_lbl_mic, "MIC n/a");
+        }
+
+      return;
+    }
+
+  level = hs_mic_level();
+  if (level == last)
+    {
+      return;
+    }
+
+  last = level;
+  lv_bar_set_value(g_mic_bar, level, LV_ANIM_OFF);
+  lv_label_set_text_fmt(g_lbl_mic, "MIC %d", level);
 }
 
 /****************************************************************************
@@ -1809,6 +1938,7 @@ int main(int argc, FAR char *argv[])
   ma_build_nav(screen);
 
   lv_timer_create(ma_refresh_timer, MA_REFRESH_MS, NULL);
+  lv_timer_create(ma_mic_timer, 100, NULL);
   ma_refresh_timer(NULL);
 
   /* Start the PPG pipeline: the beat detector needs a few seconds of samples
@@ -1818,6 +1948,7 @@ int main(int argc, FAR char *argv[])
 
   ma_ppg_start();
   ma_sys_start();
+  ma_mic_start();
 
   /* Bluetooth stays off until the LINK page switch is touched.  Bringing the
    * host stack up costs a burst of synchronous HCI traffic, and starting it

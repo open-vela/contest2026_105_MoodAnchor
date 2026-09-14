@@ -4,6 +4,7 @@
 
 #include "huangshan_hal.h"
 #include "hs_ble.h"
+#include "hs_mic.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -565,94 +566,64 @@ static int hs_demo_imu(void)
 
 static int hs_demo_mic_once(void)
 {
-  struct hs_mic_s mic = { .fd = -1 };
-  int16_t samples[128];
-  ssize_t count;
   int ret;
+  int i;
 
-  ret = hs_mic_open(&mic, 16000);
+  ret = hs_mic_start();
   if (ret < 0)
     {
-      printf("mic: %s unavailable (%d); enable AUDCODEC PCM backend\n",
-             HS_MIC_DEVICE, ret);
+      printf("mic: start failed (%d)\n", ret);
       return ret;
     }
 
-  count = hs_mic_read(&mic, samples, sizeof(samples) / sizeof(samples[0]));
-  if (count < 0)
+  /* Let a few blocks land before reporting.  One block is 32 ms. */
+
+  for (i = 0; i < 40; i++)
     {
-      ret = -errno;
-      printf("mic: read failed (%d)\n", ret);
+      hs_mic_service();
+      usleep(5000);
     }
-  else
-    {
-      int i;
-      int32_t sum = 0;
-      int16_t peak = 0;
-      for (i = 0; i < count; i++)
-        {
-          int16_t value = samples[i] < 0 ? -samples[i] : samples[i];
-          sum += value;
-          if (value > peak) peak = value;
-        }
-      printf("mic: samples=%ld avg_abs=%ld peak=%d rate=%lu\n",
-             (long)count, count > 0 ? (long)(sum / count) : 0L,
-             peak, (unsigned long)mic.sample_rate);
-      ret = 0;
-    }
-  hs_mic_close(&mic);
-  return ret;
+
+  printf("mic: blocks=%lu mean=%d peak=%d level=%d\n",
+         (unsigned long)hs_mic_blocks(), hs_mic_mean(), hs_mic_peak(),
+         hs_mic_level());
+
+  hs_mic_stop();
+  return OK;
 }
 
 static int hs_demo_mic_stream(void)
 {
-  struct hs_mic_s mic = { .fd = -1 };
-  int16_t samples[160];
+  uint32_t last = 0;
+  uint32_t seen;
   int ret;
 
-  ret = hs_mic_open(&mic, 16000);
+  ret = hs_mic_start();
   if (ret < 0)
     {
-      printf("mic_stream: %s unavailable (%d); enable AUDCODEC PCM backend\n",
-             HS_MIC_DEVICE, ret);
+      printf("mic_stream: start failed (%d)\n", ret);
       return ret;
     }
-  printf("time_ms,avg_abs,peak\n");
+
+  printf("blocks,mean,peak,level\n");
+
   for (;;)
     {
-      ssize_t count = hs_mic_read(&mic, samples,
-                                  sizeof(samples) / sizeof(samples[0]));
-      if (count < 0)
+      hs_mic_service();
+
+      seen = hs_mic_blocks();
+      if (seen != last)
         {
-          if (errno == EAGAIN)
-            {
-              usleep(50000);
-              continue;
-            }
-          ret = -errno;
-          break;
+          last = seen;
+          printf("%lu,%d,%d,%d\n", (unsigned long)seen, hs_mic_mean(),
+                 hs_mic_peak(), hs_mic_level());
         }
-      if (count > 0)
-        {
-          int i;
-          int32_t sum = 0;
-          int16_t peak = 0;
-          struct timespec ts;
-          for (i = 0; i < count; i++)
-            {
-              int16_t value = samples[i] < 0 ? -samples[i] : samples[i];
-              sum += value;
-              if (value > peak) peak = value;
-            }
-          clock_gettime(CLOCK_MONOTONIC, &ts);
-          printf("%lld,%ld,%d\n",
-                 (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000,
-                 (long)(sum / count), peak);
-        }
-      usleep(50000);
+
+      usleep(5000);
     }
-  hs_mic_close(&mic);
-  return ret;
+
+  hs_mic_stop();
+  return OK;
 }
 
 static int hs_demo_gsr_once(void)
