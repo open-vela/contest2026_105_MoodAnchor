@@ -132,12 +132,6 @@ struct hs_ble_advparam_s
   uint8_t  filter_policy;
 };
 
-struct hs_ble_data_s
-{
-  uint8_t  len;
-  uint8_t  data[HS_BLE_ADV_MAX];
-};
-
 /****************************************************************************
  * Private Data
  ****************************************************************************/
@@ -386,7 +380,7 @@ static struct bt_gatt_ccc_cfg_s g_ccc_battery[1];
 /* Characteristic values --------------------------------------------------- */
 
 static char     g_name[HS_BLE_NAME_SIZE] = HS_BLE_NAME_PREFIX "0000";
-static uint16_t g_appearance;
+static uint16_t g_appearance = 0x0341;  /* GAP appearance: wrist-worn watch */
 
 static uint8_t  g_event_pkt[HS_BLE_EVENT_LEN];
 static uint16_t g_event_seq;
@@ -424,18 +418,21 @@ static uint16_t g_adv_int_max = HS_BLE_ADV_INT_IDLE * 8 / 5;
 
 static int      g_boost_gen;
 
-/* Advertising data -------------------------------------------------------- */
-
-static uint8_t  g_adv[HS_BLE_ADV_MAX];
-static uint8_t  g_adv_len;
-static uint8_t  g_srsp[HS_BLE_ADV_MAX];
-static uint8_t  g_srsp_len;
-
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
 
 static volatile bool g_peer_connected;
+
+/* Set by the CCC callback when a peer drops the link.  The controller stops
+ * advertising automatically once a connection is established and, per the
+ * Bluetooth spec, it does NOT resume it afterwards.  The NuttX host keeps
+ * its own adv_enable flag set, so the stack never re-arms the advertiser on
+ * its own: without this flag the device silently stops being discoverable
+ * after the first disconnect.
+ */
+
+static volatile bool g_adv_restart;
 
 bool hs_ble_gatt_peer_connected(void)
 {
@@ -445,11 +442,25 @@ bool hs_ble_gatt_peer_connected(void)
 static void hs_ble_ccc_cfg_changed(uint16_t value)
 {
   /* The stack keeps the per-peer CCC configuration and bt_gatt_notify()
-   * picks it up.  We only track whether some peer has subscribed (used as
-   * the "phone connected" signal for the UI).
+   * picks it up.  We track whether some peer has subscribed (used as the
+   * "phone connected" signal for the UI) and re-arm the advertiser when the
+   * last subscriber goes away, which the stack does on disconnect.
    */
 
+  bool was = g_peer_connected;
+
   g_peer_connected = (value != 0);
+
+  if (was && value == 0)
+    {
+      /* Do NOT call hs_ble_adv_apply() here: this callback runs in the
+       * receive path of the Bluetooth thread, and the advertising commands
+       * wait for HCI command complete events that the very same thread has
+       * to deliver (self deadlock).  Defer it to the BLE worker instead.
+       */
+
+      g_adv_restart = true;
+    }
 }
 
 /****************************************************************************
@@ -702,43 +713,6 @@ static uint16_t hs_ble_interval_units(uint16_t ms)
 }
 
 /****************************************************************************
- * Name: hs_ble_build_advdata
- *
- * Description:
- *   Build the advertising data (flags + 128 bit service UUID) and the scan
- *   response (complete local name).
- *
- ****************************************************************************/
-
-static void hs_ble_build_advdata(void)
-{
-  size_t nlen = strlen(g_name);
-  size_t i = 0;
-
-  if (nlen > HS_BLE_ADV_MAX - 2)
-    {
-      nlen = HS_BLE_ADV_MAX - 2;
-    }
-
-  g_adv[i++] = 2;
-  g_adv[i++] = BT_EIR_FLAGS;
-  g_adv[i++] = 0x06;              /* LE general discoverable, no BR/EDR */
-
-  g_adv[i++] = 17;                /* 1 byte type + 16 bytes UUID */
-  g_adv[i++] = BT_EIR_UUID128_ALL;
-  memcpy(&g_adv[i], g_uuid_mood.u.u128, sizeof(g_uuid_mood.u.u128));
-  i += sizeof(g_uuid_mood.u.u128);
-  g_adv_len = (uint8_t)i;
-
-  i = 0;
-  g_srsp[i++] = (uint8_t)(nlen + 1);
-  g_srsp[i++] = BT_EIR_NAME_COMPLETE;
-  memcpy(&g_srsp[i], g_name, nlen);
-  i += nlen;
-  g_srsp_len = (uint8_t)i;
-}
-
-/****************************************************************************
  * Name: hs_ble_adv_apply
  *
  * Description:
@@ -750,7 +724,7 @@ static void hs_ble_build_advdata(void)
 
 static int hs_ble_adv_apply(void)
 {
-  struct bt_eir_s ad[3];
+  struct bt_eir_s ad[4];
   struct bt_eir_s sd[2];
   size_t name_len;
   int ret;
@@ -773,10 +747,12 @@ static int hs_ble_adv_apply(void)
       return ret;
     }
 
-  /* Main advertising packet: Flags + the complete device name.  Many
-   * Android system Bluetooth scanners only list peripherals whose main
-   * advertising packet carries a local name (they never send a scan
-   * request), so the name must live here rather than in the scan response.
+  /* Main advertising packet: Flags, the GAP appearance (Android uses this
+   * to classify the peripheral as a wrist-worn device) and the complete
+   * device name.  Many Android system Bluetooth scanners only list
+   * peripherals whose main advertising packet carries a local name (they
+   * never send a scan request), so the name must live here rather than in
+   * the scan response.
    */
 
   memset(ad, 0, sizeof(ad));
@@ -784,15 +760,20 @@ static int hs_ble_adv_apply(void)
   ad[0].type = BT_EIR_FLAGS;
   ad[0].data[0] = 0x06;
 
+  ad[1].len = 3;
+  ad[1].type = BT_EIR_GAP_APPEARANCE;
+  ad[1].data[0] = (uint8_t)(g_appearance & 0xff);
+  ad[1].data[1] = (uint8_t)(g_appearance >> 8);
+
   name_len = strlen(g_name);
-  if (name_len > sizeof(ad[1].data))
+  if (name_len > sizeof(ad[2].data))
     {
-      name_len = sizeof(ad[1].data);
+      name_len = sizeof(ad[2].data);
     }
 
-  ad[1].len = (uint8_t)(name_len + 1);   /* type byte + name */
-  ad[1].type = BT_EIR_NAME_COMPLETE;
-  memcpy(ad[1].data, g_name, name_len);
+  ad[2].len = (uint8_t)(name_len + 1);   /* type byte + name */
+  ad[2].type = BT_EIR_NAME_COMPLETE;
+  memcpy(ad[2].data, g_name, name_len);
 
   /* Scan response packet: the 128 bit MoodAnchor service UUID. */
 
@@ -868,8 +849,6 @@ int hs_ble_gatt_start(const char *suffix)
 
   snprintf(g_name, sizeof(g_name), HS_BLE_NAME_PREFIX "%s", hex);
   snprintf(g_dis_sn, sizeof(g_dis_sn), "%s", hex);
-
-  hs_ble_build_advdata();
 
   /* Install our database (replaces the one installed by the host stack) */
 
@@ -1080,6 +1059,18 @@ int hs_ble_status_notify(uint16_t gsr_mv, uint8_t hr_bpm, uint8_t spo2,
   g_status_pkt[14] = vibration ? 1 : 0;
   g_status_pkt[15] = 0;
 
+  /* Keep the standard Battery Service in step with the packed status so a
+   * client can subscribe to either one.  Only notify when the value
+   * actually changes: a percentage rarely moves and unsolicited traffic
+   * would keep an idle phone awake.
+   */
+
+  if (battery != HS_BLE_STATUS_BAT_UNKNOWN && battery != g_battery)
+    {
+      g_battery = battery;
+      bt_gatt_notify(HS_H_BAS_LEVEL_VAL, &g_battery, sizeof(g_battery));
+    }
+
   /* No-op unless a peer has written the status CCC descriptor */
 
   bt_gatt_notify(HS_H_STATUS_VAL, g_status_pkt, sizeof(g_status_pkt));
@@ -1089,6 +1080,38 @@ int hs_ble_status_notify(uint16_t gsr_mv, uint8_t hr_bpm, uint8_t spo2,
 const uint8_t *hs_ble_status_last(void)
 {
   return g_status_pkt;
+}
+
+void hs_ble_adv_service(void)
+{
+  if (!g_adv_restart || !g_gatt_installed)
+    {
+      return;
+    }
+
+  /* A peer has dropped the link and the controller stopped advertising when
+   * that link was established.  Re-arm the advertiser so the device becomes
+   * discoverable again.  hs_ble_adv_apply() issues the full stop / set data /
+   * set parameters / enable sequence, so the stale host state is corrected
+   * as well.  Must run from a normal thread context, never from the receive
+   * path of the Bluetooth thread.
+   */
+
+  g_adv_restart = false;
+
+  if (hs_ble_adv_apply() == OK)
+    {
+      printf("[BLE] link dropped, advertising restarted\n");
+    }
+  else
+    {
+      /* The controller may still be tearing the link down and reject the
+       * enable command with "command disallowed": keep the request pending
+       * so the next tick retries it.
+       */
+
+      g_adv_restart = true;
+    }
 }
 
 const uint8_t *hs_ble_event_last(void)

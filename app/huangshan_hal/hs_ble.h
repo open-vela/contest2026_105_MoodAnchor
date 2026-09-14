@@ -131,7 +131,7 @@
 
 /* Advertising intervals (milliseconds) */
 
-#define HS_BLE_ADV_INT_IDLE     500     /* normal advertising interval */
+#define HS_BLE_ADV_INT_IDLE     200     /* normal advertising interval */
 #define HS_BLE_ADV_INT_FAST_MIN 100     /* right after an event */
 #define HS_BLE_ADV_INT_FAST_MAX 200
 #define HS_BLE_ADV_BOOST_SECS   10      /* keep the fast interval for so long */
@@ -424,5 +424,18 @@ int hs_ble_status_notify(uint16_t gsr_mv, uint8_t hr_bpm, uint8_t spo2,
  ****************************************************************************/
 
 const uint8_t *hs_ble_status_last(void);
+
+/****************************************************************************
+ * Name: hs_ble_adv_service
+ *
+ * Description:
+ *   Housekeeping for the advertising state machine.  The controller stops
+ *   advertising when a phone connects and does not resume it after the link
+ *   is dropped, so this must be polled from a normal thread to re-arm the
+ *   advertiser and keep the device discoverable.
+ *
+ ****************************************************************************/
+
+void hs_ble_adv_service(void);
 
 #endif /* __APP_HUANGSHAN_HAL_HS_BLE_H */

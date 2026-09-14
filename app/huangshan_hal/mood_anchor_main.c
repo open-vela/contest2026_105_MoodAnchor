@@ -102,12 +102,14 @@ static struct hs_imu_s      g_imu;
 static struct hs_max30102_s g_max;
 static struct hs_adc_s      g_batt;
 static struct hs_vibration_s g_vib;
+static struct hs_buttons_s  g_btn;
 
 static bool g_gsr_open;
 static bool g_imu_open;
 static bool g_max_open;
 static bool g_batt_open;
 static bool g_vib_open;
+static bool g_btn_open;
 
 /* Latest samples */
 
@@ -707,6 +709,7 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
       uint8_t  sflags = 0;
       int16_t  accel[3] = { 0, 0, 0 };
       uint8_t  battery = HS_BLE_STATUS_BAT_UNKNOWN;
+      uint8_t  buttons = 0;
       bool     vib     = false;
 
       if (g_ble_gsr_ok)
@@ -774,11 +777,32 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
           sflags |= HS_BLE_STATUS_VIB_ON;
         }
 
+      /* Buttons: bit map of the currently pressed keys (0 = none). */
+
+      if (g_btn_open || hs_buttons_open(&g_btn, HS_BUTTONS_DEVICE) >= 0)
+        {
+          uint32_t state = 0;
+
+          g_btn_open = true;
+
+          if (hs_buttons_read(&g_btn, &state) >= 0)
+            {
+              buttons  = (uint8_t)(state & 0xff);
+              sflags  |= HS_BLE_STATUS_BTN_VALID;
+            }
+        }
+
       hs_ble_data_notify((uint16_t)g_ble_gsr_mv, g_ble_hr, g_ble_spo2,
                          flags);
       hs_ble_status_notify((uint16_t)g_ble_gsr_mv, g_ble_hr, g_ble_spo2,
                            (sflags & HS_BLE_STATUS_IMU_VALID) ? accel : NULL,
-                           battery, 0, vib, sflags);
+                           battery, buttons, vib, sflags);
+
+      /* The controller stops advertising as soon as a phone connects and
+       * never resumes it by itself: re-arm it after a disconnect.
+       */
+
+      hs_ble_adv_service();
 
       sleep(1);
     }
