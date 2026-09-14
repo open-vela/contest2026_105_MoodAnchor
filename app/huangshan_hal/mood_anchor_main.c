@@ -100,10 +100,14 @@ static lv_obj_t *g_lbl_ble_info;
 static struct hs_gsr_s      g_gsr;
 static struct hs_imu_s      g_imu;
 static struct hs_max30102_s g_max;
+static struct hs_adc_s      g_batt;
+static struct hs_vibration_s g_vib;
 
 static bool g_gsr_open;
 static bool g_imu_open;
 static bool g_max_open;
+static bool g_batt_open;
+static bool g_vib_open;
 
 /* Latest samples */
 
@@ -699,20 +703,82 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
 
   while (g_ble_data_run)
     {
-      uint8_t flags = 0;
+      uint8_t  flags  = 0;
+      uint8_t  sflags = 0;
+      int16_t  accel[3] = { 0, 0, 0 };
+      uint8_t  battery = HS_BLE_STATUS_BAT_UNKNOWN;
+      bool     vib     = false;
 
       if (g_ble_gsr_ok)
         {
-          flags |= HS_BLE_DATA_GSR_VALID;
+          flags  |= HS_BLE_DATA_GSR_VALID;
+          sflags |= HS_BLE_STATUS_GSR_VALID;
         }
 
       if (g_ble_vitals_ok)
         {
-          flags |= HS_BLE_DATA_HR_VALID | HS_BLE_DATA_SPO2_VALID;
+          flags  |= HS_BLE_DATA_HR_VALID | HS_BLE_DATA_SPO2_VALID;
+          sflags |= HS_BLE_STATUS_HR_VALID | HS_BLE_STATUS_SPO2_VALID;
+        }
+
+      /* Motion: read the IMU on demand (the sensor is also used by the
+       * MOTION page, so failures are simply reported as invalid).
+       */
+
+      if (g_imu_open || hs_imu_open(&g_imu) >= 0)
+        {
+          struct hs_imu_sample_s sample;
+
+          g_imu_open = true;
+
+          if (hs_imu_read(&g_imu, &sample) >= 0)
+            {
+              accel[0] = sample.accel_x_mg;
+              accel[1] = sample.accel_y_mg;
+              accel[2] = sample.accel_z_mg;
+              sflags  |= HS_BLE_STATUS_IMU_VALID;
+            }
+        }
+
+      /* Battery: VBAT ADC channel, only reported as a coarse percentage. */
+
+      if (g_batt_open || hs_adc_open(&g_batt, HS_ADC_DEVICE) >= 0)
+        {
+          int32_t mv = 0;
+
+          g_batt_open = true;
+
+          if (hs_adc_read(&g_batt, HS_ADC_VBAT_CHANNEL, &mv) >= 0 && mv > 0)
+            {
+              /* 3.3 V .. 4.2 V mapped to 0..100 % */
+
+              int32_t pct = (mv - 3300) * 100 / 900;
+
+              if (pct < 0)   { pct = 0; }
+              if (pct > 100) { pct = 100; }
+
+              battery  = (uint8_t)pct;
+              sflags  |= HS_BLE_STATUS_BAT_VALID;
+            }
+        }
+
+      vib = false;
+      if (g_vib_open || hs_vibration_open(&g_vib) >= 0)
+        {
+          g_vib_open = true;
+          vib        = hs_vibration_is_enabled(&g_vib);
+        }
+
+      if (vib)
+        {
+          sflags |= HS_BLE_STATUS_VIB_ON;
         }
 
       hs_ble_data_notify((uint16_t)g_ble_gsr_mv, g_ble_hr, g_ble_spo2,
                          flags);
+      hs_ble_status_notify((uint16_t)g_ble_gsr_mv, g_ble_hr, g_ble_spo2,
+                           (sflags & HS_BLE_STATUS_IMU_VALID) ? accel : NULL,
+                           battery, 0, vib, sflags);
 
       sleep(1);
     }

@@ -80,6 +80,10 @@ extern int bt_stop_advertising(void);
 #define HS_H_DATA_VAL           0x0017
 #define HS_H_DATA_CCC           0x0018
 
+#define HS_H_STATUS_CHRC        0x0019
+#define HS_H_STATUS_VAL         0x001a
+#define HS_H_STATUS_CCC         0x001b
+
 #define HS_H_DIS_SVC            0x0020
 #define HS_H_DIS_MANUF_CHRC     0x0021
 #define HS_H_DIS_MANUF_VAL      0x0022
@@ -218,6 +222,18 @@ static struct bt_uuid_s g_uuid_data =
   }
 };
 
+/* d38a0005-1234-5678-9abc-def012345678 (full device status) */
+
+static struct bt_uuid_s g_uuid_status =
+{
+  .type = BT_UUID_128,
+  .u.u128 =
+  {
+    0x05, 0x00, 0x8a, 0xd3, 0x34, 0x12, 0x78, 0x56,
+    0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0xf0, 0xde
+  }
+};
+
 static struct bt_uuid_s g_uuid_dis =
 {
   .type  = BT_UUID_16,
@@ -310,6 +326,13 @@ static struct bt_gatt_chrc_s g_chrc_data =
   .uuid         = &g_uuid_data,
 };
 
+static struct bt_gatt_chrc_s g_chrc_status =
+{
+  .properties   = BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+  .value_handle = HS_H_STATUS_VAL,
+  .uuid         = &g_uuid_status,
+};
+
 static struct bt_gatt_chrc_s g_chrc_dis_manuf =
 {
   .properties   = BT_GATT_CHRC_READ,
@@ -357,6 +380,7 @@ static struct bt_gatt_chrc_s g_chrc_bas_level =
 static struct bt_gatt_ccc_cfg_s g_ccc_sc[1];
 static struct bt_gatt_ccc_cfg_s g_ccc_event[1];
 static struct bt_gatt_ccc_cfg_s g_ccc_data[1];
+static struct bt_gatt_ccc_cfg_s g_ccc_status[1];
 static struct bt_gatt_ccc_cfg_s g_ccc_battery[1];
 
 /* Characteristic values --------------------------------------------------- */
@@ -368,6 +392,7 @@ static uint8_t  g_event_pkt[HS_BLE_EVENT_LEN];
 static uint16_t g_event_seq;
 
 static uint8_t  g_data_pkt[HS_BLE_DATA_LEN];
+static uint8_t  g_status_pkt[HS_BLE_STATUS_LEN];
 
 static uint8_t  g_ctrl[HS_BLE_CTRL_MAX];
 static size_t   g_ctrl_len;
@@ -475,6 +500,14 @@ static int hs_ble_read_data(FAR struct bt_conn_s *conn,
 {
   return bt_gatt_attr_read(conn, attr, buf, len, offset, g_data_pkt,
                            sizeof(g_data_pkt));
+}
+
+static int hs_ble_read_status(FAR struct bt_conn_s *conn,
+                              FAR const struct bt_gatt_attr_s *attr,
+                              FAR void *buf, uint8_t len, uint16_t offset)
+{
+  return bt_gatt_attr_read(conn, attr, buf, len, offset, g_status_pkt,
+                           sizeof(g_status_pkt));
 }
 
 static int hs_ble_read_string(FAR struct bt_conn_s *conn,
@@ -611,6 +644,11 @@ static const struct bt_gatt_attr_s g_attrs[] =
                      hs_ble_read_data, NULL, NULL),
   BT_GATT_CCC(HS_H_DATA_CCC, HS_H_DATA_VAL, g_ccc_data,
               hs_ble_ccc_cfg_changed),
+  BT_GATT_CHARACTERISTIC(HS_H_STATUS_CHRC, &g_chrc_status),
+  BT_GATT_DESCRIPTOR(HS_H_STATUS_VAL, &g_uuid_status, BT_GATT_PERM_READ,
+                     hs_ble_read_status, NULL, NULL),
+  BT_GATT_CCC(HS_H_STATUS_CCC, HS_H_STATUS_VAL, g_ccc_status,
+              hs_ble_ccc_cfg_changed),
 
   /* Device Information Service */
 
@@ -735,24 +773,33 @@ static int hs_ble_adv_apply(void)
       return ret;
     }
 
+  /* Main advertising packet: Flags + the complete device name.  Many
+   * Android system Bluetooth scanners only list peripherals whose main
+   * advertising packet carries a local name (they never send a scan
+   * request), so the name must live here rather than in the scan response.
+   */
+
   memset(ad, 0, sizeof(ad));
   ad[0].len = 2;
   ad[0].type = BT_EIR_FLAGS;
   ad[0].data[0] = 0x06;
-  ad[1].len = 17;
-  ad[1].type = BT_EIR_UUID128_ALL;
-  memcpy(ad[1].data, g_uuid_mood.u.u128, sizeof(g_uuid_mood.u.u128));
 
-  memset(sd, 0, sizeof(sd));
   name_len = strlen(g_name);
-  if (name_len > sizeof(sd[0].data) - 1)
+  if (name_len > sizeof(ad[1].data))
     {
-      name_len = sizeof(sd[0].data) - 1;
+      name_len = sizeof(ad[1].data);
     }
 
-  sd[0].len = (uint8_t)(name_len + 1); /* type byte + name */
-  sd[0].type = BT_EIR_NAME_COMPLETE;
-  memcpy(sd[0].data, g_name, name_len);
+  ad[1].len = (uint8_t)(name_len + 1);   /* type byte + name */
+  ad[1].type = BT_EIR_NAME_COMPLETE;
+  memcpy(ad[1].data, g_name, name_len);
+
+  /* Scan response packet: the 128 bit MoodAnchor service UUID. */
+
+  memset(sd, 0, sizeof(sd));
+  sd[0].len = 17;
+  sd[0].type = BT_EIR_UUID128_ALL;
+  memcpy(sd[0].data, g_uuid_mood.u.u128, sizeof(g_uuid_mood.u.u128));
 
   ret = bt_start_advertising(BT_LE_ADV_IND, ad, sd);
   if (ret < 0)
@@ -995,6 +1042,53 @@ int hs_ble_data_notify(uint16_t gsr_mv, uint8_t hr_bpm, uint8_t spo2,
 const uint8_t *hs_ble_data_last(void)
 {
   return g_data_pkt;
+}
+
+int hs_ble_status_notify(uint16_t gsr_mv, uint8_t hr_bpm, uint8_t spo2,
+                         const int16_t accel_mg[3], uint8_t battery,
+                         uint8_t buttons, bool vibration, uint8_t flags)
+{
+  if (!g_gatt_installed)
+    {
+      return -ENOTCONN;
+    }
+
+  g_status_pkt[0] = HS_BLE_STATUS_VERSION;
+  g_status_pkt[1] = flags;
+  g_status_pkt[2] = (uint8_t)(gsr_mv & 0xff);
+  g_status_pkt[3] = (uint8_t)(gsr_mv >> 8);
+  g_status_pkt[4] = hr_bpm;
+  g_status_pkt[5] = spo2;
+
+  if (accel_mg != NULL)
+    {
+      uint8_t i;
+
+      for (i = 0; i < 3; i++)
+        {
+          g_status_pkt[6 + i * 2] = (uint8_t)(accel_mg[i] & 0xff);
+          g_status_pkt[7 + i * 2] = (uint8_t)((uint16_t)accel_mg[i] >> 8);
+        }
+    }
+  else
+    {
+      memset(&g_status_pkt[6], 0, 6);
+    }
+
+  g_status_pkt[12] = battery;
+  g_status_pkt[13] = buttons;
+  g_status_pkt[14] = vibration ? 1 : 0;
+  g_status_pkt[15] = 0;
+
+  /* No-op unless a peer has written the status CCC descriptor */
+
+  bt_gatt_notify(HS_H_STATUS_VAL, g_status_pkt, sizeof(g_status_pkt));
+  return OK;
+}
+
+const uint8_t *hs_ble_status_last(void)
+{
+  return g_status_pkt;
 }
 
 const uint8_t *hs_ble_event_last(void)

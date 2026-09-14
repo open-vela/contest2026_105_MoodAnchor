@@ -72,7 +72,42 @@
 #define HS_BLE_DATA_SPO2_VALID  0x04
 #define HS_BLE_DATA_SIMULATED   0x80
 
-/* Event types (byte 1) */
+/****************************************************************************
+ * Device status packet (characteristic ...0005)
+ *
+ *   byte 0    : version (0x01)
+ *   byte 1    : flags (see HS_BLE_STATUS_* below)
+ *   byte 2-3  : skin conductance in mV   (uint16, little endian)
+ *   byte 4    : heart rate in bpm        (uint8, 0 = invalid)
+ *   byte 5    : SpO2 in %                (uint8, 0 = invalid)
+ *   byte 6-7  : acceleration X in mg     (int16, little endian)
+ *   byte 8-9  : acceleration Y in mg     (int16, little endian)
+ *   byte 10-11: acceleration Z in mg     (int16, little endian)
+ *   byte 12   : battery percent 0..100   (0xff = unknown)
+ *   byte 13   : button bitmap
+ *   byte 14   : vibration motor (0/1)
+ *   byte 15   : reserved (0)
+ *
+ * Pushed once per second on the status characteristic, together with the
+ * compact 6 byte sensor packet on ...0004.
+ */
+
+#define HS_BLE_STATUS_LEN        16
+#define HS_BLE_STATUS_VERSION    0x01
+
+#define HS_BLE_STATUS_GSR_VALID  0x01
+#define HS_BLE_STATUS_HR_VALID   0x02
+#define HS_BLE_STATUS_SPO2_VALID 0x04
+#define HS_BLE_STATUS_IMU_VALID  0x08
+#define HS_BLE_STATUS_BAT_VALID  0x10
+#define HS_BLE_STATUS_BTN_VALID  0x20
+#define HS_BLE_STATUS_VIB_ON     0x40
+
+#define HS_BLE_STATUS_BAT_UNKNOWN 0xff
+
+/****************************************************************************
+ * Event types (byte 1)
+ ****************************************************************************/
 
 #define HS_BLE_EV_NONE          0x00
 #define HS_BLE_EV_FALL          0x01    /* fall detected */
@@ -352,5 +387,42 @@ int hs_ble_data_notify(uint16_t gsr_mv, uint8_t hr_bpm, uint8_t spo2,
  ****************************************************************************/
 
 const uint8_t *hs_ble_data_last(void);
+
+/****************************************************************************
+ * Name: hs_ble_status_notify
+ *
+ * Description:
+ *   Publish the full device status packet (HS_BLE_STATUS_LEN bytes) on the
+ *   status characteristic (Notify): sensors, motion, battery and button
+ *   state in a single frame.  Nothing happens when no peer subscribed yet.
+ *
+ * Input Parameters:
+ *   gsr_mv    - skin conductance in mV
+ *   hr_bpm    - heart rate (0 when unknown)
+ *   spo2      - blood oxygen in % (0 when unknown)
+ *   accel_mg  - 3 axis acceleration in mg, may be NULL
+ *   battery   - 0..100, or HS_BLE_STATUS_BAT_UNKNOWN
+ *   buttons   - button bitmap
+ *   vibration - true when the vibration motor is running
+ *   flags     - HS_BLE_STATUS_* validity bits
+ *
+ * Returned Value:
+ *   Zero on success, a negated errno value otherwise.
+ *
+ ****************************************************************************/
+
+int hs_ble_status_notify(uint16_t gsr_mv, uint8_t hr_bpm, uint8_t spo2,
+                         const int16_t accel_mg[3], uint8_t battery,
+                         uint8_t buttons, bool vibration, uint8_t flags);
+
+/****************************************************************************
+ * Name: hs_ble_status_last
+ *
+ * Description:
+ *   Return a pointer to the last status packet (HS_BLE_STATUS_LEN bytes).
+ *
+ ****************************************************************************/
+
+const uint8_t *hs_ble_status_last(void);
 
 #endif /* __APP_HUANGSHAN_HAL_HS_BLE_H */
