@@ -133,6 +133,41 @@ printf("sf32lb52 bt: LCPU up in %lu ms\n",
 
 `sf32lb52_bth4.c` 的 `sf32lb52_bt_open()` 里保留了说明这一点的注释。
 
+### 8. `vendor/sifli/boards/.../src/sifli_ap.c` — 补上 `HAL_GetTick()`
+
+文件末尾新增一个强定义（并加 `#include <nuttx/clock.h>`）：
+
+```c
+uint32_t HAL_GetTick(void)
+{
+  return (uint32_t)(clock_systime_ticks() * (MSEC_PER_SEC / CLK_TCK));
+}
+```
+
+**为什么**：`bf0_hal.c` 里的 `HAL_GetTick()` 是 `__weak`，返回 `uwTick`；
+而 `uwTick` 只在 `HAL_IncTick()` 里自增，那是给裸机 SysTick 处理器用的。
+**整个移植层没有任何地方调用 `HAL_IncTick`**（NuttX 自己接管了 SysTick），
+所以 `uwTick` 永远是 0，`HAL_GetTick()` 永远返回 0。
+
+后果不是"时间不准"，而是 vendor/HAL 里成片的超时全部失效：
+
+```c
+if (HAL_GetTick() != start) { count++; start = HAL_GetTick(); }
+if (count >= limit) { return -ETIMEDOUT; }        /* 永远到不了 */
+```
+
+`sf32lb52_bt_wait_tx_idle()` 正是这个写法 → 蓝牙控制器只要一时没排空
+发送环，HCI 发送线程就**永久**自旋，命令发不出去，host 2.5 s 超时
+（`BT_HCI_OP_READ_LOCAL_FEATURES -110`），`cmd_queue_deinit()` 又等这个
+永远退不出的线程 —— `bt_netdev_register()` 因此永久卡住，重试逻辑根本
+轮不上。这就是「点开蓝牙一直停在 `bt_netdev_register`」的根因。
+
+验证：`arm-none-eabi-nm` 里该符号由 `W` 变成 `T`。
+
+> ⚠️ 修好之后，其它依赖 `HAL_GetTick()` 的 vendor 代码（LCDC / DSI /
+> LPComp 等）的超时行为也会跟着变回正常。之前它们的判断是"要么立刻
+> 满足、要么永远不满足"，取决于写法方向。显示相关路径已实测正常。
+
 ## 可选改动
 
 ### 2. `vendor/sifli/boards/sf32lb52/lckfb_huangshan_pi/configs/nsh/defconfig`
