@@ -1191,18 +1191,20 @@ static void ma_imu_start(void)
 
 static void ma_mic_timer(lv_timer_t *timer)
 {
-  static int last_level = -1;
-  static int last_peak  = -1;
+  static int shown;
   static int peak;
+  static int drawn_level = -1;
+  static int drawn_peak  = -1;
   int level;
 
   (void)timer;
 
   if (!g_mic_ok)
     {
-      if (last_level != -2)
+      if (drawn_level != -2)
         {
-          last_level = last_peak = -2;
+          drawn_level = drawn_peak = -2;
+          shown = peak = 0;
           lv_label_set_text(g_lbl_mic_big, "n/a");
           lv_label_set_text(g_lbl_mic_raw, "raw --");
           lv_label_set_text(g_lbl_mic_peak, "--");
@@ -1215,11 +1217,26 @@ static void ma_mic_timer(lv_timer_t *timer)
 
   level = hs_mic_level();
 
-  /* Peak hold: follow upwards immediately, then fall back one step per tick
-   * so that a short sound stays readable for a second or two.
+  /* Instant attack, slow release.  A needle that tracks the block-by-block
+   * figure exactly jitters like noise; this is the ballistic that makes it
+   * read as a level instead.  The release takes about two seconds, which is
+   * the usual feel for a sound level meter.
    */
 
-  if (level >= peak)
+  if (level > shown)
+    {
+      shown = level;
+    }
+  else if (shown > level)
+    {
+      shown -= (shown - level + 7) / 8;
+    }
+
+  /* Peak hold: jump to a new maximum, then fall back one step per tick, so a
+   * short sound stays visible for a few seconds.
+   */
+
+  if (level > peak)
     {
       peak = level;
     }
@@ -1228,19 +1245,23 @@ static void ma_mic_timer(lv_timer_t *timer)
       peak--;
     }
 
-  if (last_level >= 0 && level > last_level - 2 && level < last_level + 2 &&
-      peak == last_peak)
+  /* Nothing visible changed: skip the redraw entirely.  The arc is large, and
+   * this page is redrawn ten times a second, so a quiet room should cost the
+   * panel nothing at all.
+   */
+
+  if (shown == drawn_level && peak == drawn_peak)
     {
       return;
     }
 
-  last_level = level;
-  last_peak  = peak;
+  drawn_level = shown;
+  drawn_peak  = peak;
 
-  lv_arc_set_value(g_mic_arc, level);
-  lv_obj_set_style_arc_color(g_mic_arc, lv_color_hex(ma_mic_color(level)),
+  lv_arc_set_value(g_mic_arc, shown);
+  lv_obj_set_style_arc_color(g_mic_arc, lv_color_hex(ma_mic_color(shown)),
                              LV_PART_INDICATOR);
-  lv_label_set_text_fmt(g_lbl_mic_big, "%d", level);
+  lv_label_set_text_fmt(g_lbl_mic_big, "%d", shown);
   lv_label_set_text_fmt(g_lbl_mic_raw, "raw %d", hs_mic_mean());
 
   lv_bar_set_value(g_mic_peak_bar, peak, LV_ANIM_OFF);

@@ -66,14 +66,24 @@ bool hs_mic_ready(void)
  * the raw magnitude.  A linear scale would spend most of its travel on the
  * top few dB and leave speech squashed against the bottom of the meter.
  *
- * The window is 6.64 octaves wide, which is 40 dB - about the range from a
- * quiet room to a raised voice - starting at a mean magnitude of roughly 50.
- * Working in octaves also means the curve stays sensible whatever gain the
- * codec is left at, so it does not have to be recalibrated.
+ * The window was set from measurements on the board, at the +12 dB gain the
+ * codec runs with:
+ *
+ *   quiet room       mean ~25      4.6 octaves
+ *   normal speech    mean ~310     8.3 octaves
+ *   loud speech      mean ~3100    11.6 octaves
+ *
+ * That is a 42 dB span, so a 48 dB window (8 octaves) starting at log2(means
+ * of about 15) fits the whole range in with a little headroom left for a
+ * shout.  The result reads roughly 8 when quiet, 50 while talking normally
+ * and 95 when loud.
+ *
+ * Working in octaves also means the curve only shifts, rather than deforming,
+ * if the codec gain is ever changed.
  */
 
-#define HS_MIC_LOG2_AT_ZERO  1444    /* log2(50) in 1/256 units */
-#define HS_MIC_LOG2_SPAN     1700    /* 6.64 octaves in 1/256 units */
+#define HS_MIC_LOG2_AT_ZERO  1004    /* log2(15) in 1/256 units */
+#define HS_MIC_LOG2_SPAN     2048    /* 8 octaves in 1/256 units */
 
 /****************************************************************************
  * Name: hs_mic_log2_q8
