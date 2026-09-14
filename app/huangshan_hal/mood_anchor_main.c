@@ -1033,7 +1033,14 @@ int main(int argc, FAR char *argv[])
   lv_timer_create(ma_refresh_timer, MA_REFRESH_MS, NULL);
   ma_refresh_timer(NULL);
 
-  /* BLE stays off until the LINK page switch is touched. */
+  /* Bring the Bluetooth peripheral up automatically so the watch is
+   * discoverable right after power-up: the LINK page switch then only acts
+   * as a manual off/on control.  This also keeps the device usable when the
+   * panel is not lit (the phone can still connect and read the status
+   * characteristic).
+   */
+
+  ma_ble_start_async();
 
   printf("MoodAnchor UI running (swipe for VITALS / MOTION / LINK)\n");
 
