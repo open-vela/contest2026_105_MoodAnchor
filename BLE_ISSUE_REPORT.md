@@ -1,6 +1,65 @@
 # BLE 集成问题报告（求助）
 
-## 最新进展（2026-09-14 夜间更新）
+## 最新进展（2026-09-14 深夜：卡死已定位并修复）
+
+### 卡死根因（已用崩溃现场确认）✅
+
+抓到完整 dump 后定位：**不是卡死，是断言停机**。
+
+```
+hci_initialize: ERROR: BT_HCI_OP_RESET failed: -110
+Assertion failed at nuttx/include/nuttx/semaphore.h:761 task: hpwork
+```
+
+`semaphore.h:761` 是 `DEBUGASSERT(!NXSEM_IS_MUTEX(sem))`。用 backtrace 地址
+还原调用栈：
+
+```
+hpwork → sf32lb52_bt_rx_worker → sf32lb52_bt_forward_packet
+      → hci_cmd_complete (bt_hcicore.c:399)
+      → nxsem_post   ← 对一个已被复用的栈内存执行 post
+```
+
+因果链：
+
+1. `bt_hci_cmd_send_sync()` 把 `sem_t sync_sem` 开在**栈上**；
+2. Reset 超时（2500 ms）→ 它 `nxsem_destroy()` 并丢栈帧，**却没清掉
+   `buf->u.hci.sync`**，而该缓冲仍被 `g_btdev.sent_cmd` 引用着；
+3. LCPU 稍后才把 Reset 的回包送上来 → `hci_cmd_done()` 取出那个悬空指针 →
+   `nxsem_post()` 打到已被复用的栈内存上 → 断言停机。
+
+**“冷上电时 LCPU 就绪慢、超时 -110”本就是已知行为**（下文旧记录里就写了，
+重试 3 次就是为它加的）。真正的新问题是：**一次超时现在会把整机打死**，
+重试根本轮不上。
+
+为什么偏偏是最近才复现：LCPU 原先是**懒启动**的，整个启动开销
+（`lcpu_power_on()` + 500 ms + 最多 1 s 的 ring 同步）都花在 host 给单个同步
+命令的 2.5 s 预算内。冷上电吃满预算 → 回包落在超时后 → 触发断言。
+
+### 修复（两处，已编译）
+
+1. `nuttx/wireless/bluetooth/bt_hcicore.c`：超时后清除 `buf->u.hci.sync`
+   （竞态下已写入的响应缓冲则释放之）。迟到回包变成无害 no-op，超时退回
+   “一次失败”的本来语义，重试得以生效。
+2. `vendor/sifli/chips/sf32lb52/sf32lb52_bth4.c`：把
+   `sf32lb52_bt_controller_enable()` 提到 `open()` 里。LCPU 启动不再占用
+   同步命令超时预算；ring 的 `read=write` 同步也因此发生在 host 开始发命令
+   **之前**（对旧记录里的“疑点 3 opcode 错位”应当也有帮助）。
+
+另在 `sf32lb52_bt_controller_enable()` 里加了 LCPU 启动耗时打印。注意本板
+`CONFIG_SYSLOG_CHAR` / `CONFIG_SYSLOG_CONSOLE` 均未开，该文件原有的 `syslog()`
+全是黑洞，故改用 `printf`。
+
+### 仍待验证 ⏳
+
+- 点开关是否仍需重试（看 `sf32lb52 bt: LCPU up in N ms` 的实际值）
+- 手机连接是否成功
+- 已加的仪表：`[ui] N`（LVGL 线程活否）、`[hb] ... heap=`（连接时建 16 KB
+  线程是否内存不足）、LINK 页 `trace N`（5=CCC订阅 7=发data前 9=一轮完）
+
+---
+
+## 早期记录
 
 ### 已解决 ✅
 1. **系统卡死**：根因是诊断日志洪泛（每个 HCI 事件/每次 workqueue 调度都 printf，1Mbps console 阻塞拖死系统）。已全部清理，实测 LVGL 运行 3 分钟后 NSH 依然响应。

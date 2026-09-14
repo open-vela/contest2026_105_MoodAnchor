@@ -86,6 +86,54 @@ HAL_Delay_us(10 * 1000);      /* 20 次 × 10 ms = 单次调用阻塞约 200 ms 
 - `app/huangshan_hal/huangshan_hal.h`：`HS_ADC_VBAT_CHANNEL` 由 `5` 改为 `7`
   （`hs_adc_read()` 要按通道号匹配返回样本里的 `am_channel`）
 
+### 6. `nuttx/wireless/bluetooth/bt_hcicore.c` — 同步命令超时后解除悬空指针
+
+搜索注释 `The command buffer outlives this call` 即可定位，改动在
+`bt_hci_cmd_send_sync()` 里。
+
+**为什么**：`bt_hci_cmd_send_sync()` 把 `sem_t sync_sem` 开在**自己的栈上**，
+通过 `buf->u.hci.sync = &sync_sem` 交给完成回调。超时返回时它 `nxsem_destroy()`
+这个信号量并丢栈帧，**但没有清掉 `buf->u.hci.sync`**。而该命令缓冲仍被
+`g_btdev.sent_cmd` 引用着，于是迟到的 Command Complete 走到：
+
+```c
+  if (sent->u.hci.sync != NULL)
+    {
+      FAR sem_t *sem = sent->u.hci.sync;   /* 指向已复用的栈内存 */
+      nxsem_post(sem);                     /* → DEBUGASSERT(!NXSEM_IS_MUTEX(sem)) */
+    }
+```
+
+复用的栈槽恰好长得像 mutex，断言直接**停机**（屏幕冻在最后一帧、此后蓝牙再也
+起不来）。也就是说，**一条慢一点的 HCI 命令可以把整机打死**。
+
+**改法**：`ret < 0` 时把 `buf->u.hci.sync` 置 NULL；若在此期间完成回调已经
+把响应缓冲写进该字段（竞态），则在超时路径里 `bt_buf_release()` 它再置 NULL。
+
+**效果**：超时退回成本来的语义 —— 一次失败，`hs_ble_host_start()` 的 3 次重试
+机会得以生效，而不是停机。
+
+### 7. `vendor/sifli/chips/sf32lb52/sf32lb52_bth4.c` — `open()` 阶段就拉起 LCPU
+
+`sf32lb52_bt_open()` 里，在 `sf32lb52_hci_register_callback()` 之后补上
+`sf32lb52_bt_controller_enable()`。
+
+**为什么**：LCPU 原本是**懒启动**的 —— `sf32lb52_bt_send()` 在发第一条命令前
+才调 `sf32lb52_bt_ensure_controller_enabled()`。于是整个 LCPU 启动过程
+（`lcpu_power_on()` + 500 ms wake sleep + `ipc_queue_open()` + 最多 1 s 的
+`sf32lb52_bt_wait_rx_ring_ready()`）全都花在 host 给**单个同步命令**的
+2.5 s 预算里（`TIMEOUT_MSEC`）。冷上电时这笔开销吃满甚至超出预算，Reset 的
+回包就落在超时之后 —— 正是第 6 条那个断言停机的触发条件。
+
+`open()` 不在任何超时窗口内，启动开销应该花在这里。改完之后 `send()` 路径里的
+enable 检查退化为立即返回。顺带这也让 ring buffer 的 `read=write` 同步发生在
+host 开始发命令**之前**，而不是第一条命令的发送途中。
+
+配套：`sf32lb52_bt_adapter.c` 的 `sf32lb52_bt_controller_enable()` 里加了
+`printf("sf32lb52 bt: LCPU up in %lu ms")`。注意本板 **`CONFIG_SYSLOG_CHAR` /
+`CONFIG_SYSLOG_CONSOLE` 都没开**，该文件里原有的 `syslog()` 全部是黑洞，
+所以这里必须用 `printf`（并补 `#include <stdio.h>`）。
+
 ## 可选改动
 
 ### 2. `vendor/sifli/boards/sf32lb52/lckfb_huangshan_pi/configs/nsh/defconfig`
@@ -113,6 +161,16 @@ printf→nxmutex_wait 断言崩溃的坑）。
 
 ## 踩坑速记
 
+- **同步命令超时是致命的**：`bt_hci_cmd_send_sync()` 的 `sync_sem` 在栈上，
+  超时路径不清指针 → 迟到回包对着复用栈内存 `nxsem_post()` → 断言停机。
+  已修（见“必需改动 6”），但写新代码时注意同一模式。
+- **本板 `syslog()` 是黑洞**：`CONFIG_SYSLOG=y` 但 `CONFIG_SYSLOG_CHAR` 与
+  `CONFIG_SYSLOG_CONSOLE` 都没开，没有 sink。vendor 驱动里的 `syslog(LOG_ERR,...)`
+  一直看不到输出，排障时容易误判。要可见就用 `printf`。
+- **抓崩溃现场很有用**：`logs/ble-crash.txt` 里的 `sched_dumpstack: backtrace|N:`
+  地址，配 `arm-none-eabi-addr2line -f -C -e
+  cmake_out/lckfb_huangshan_pi_nsh/nuttx <addr...>` 可以直接还原调用栈。
+  本板串口分块会打乱行，日志看着乱但地址是完整的。
 - **中断上下文禁用 printf**：LCPU mailbox 中断 → work_queue → printf → 断言崩溃
   （`semaphore.h:518 DEBUGASSERT(!up_interrupt_context())`）
 - NuttX fd 表按 task group 隔离（内核线程看不到应用 fd）
