@@ -168,6 +168,35 @@ if (count >= limit) { return -ETIMEDOUT; }        /* 永远到不了 */
 > LPComp 等）的超时行为也会跟着变回正常。之前它们的判断是"要么立刻
 > 满足、要么永远不满足"，取决于写法方向。显示相关路径已实测正常。
 
+### 9. `vendor/sifli/chips/sf32lb52/sf32lb52_bt_adapter.c` — 初始化 H2L 发送环下标
+
+`sf32lb52_bt_controller_enable()` 里，在 `up_clean_dcache(TX_BUF_ADDR, ...)`
+**之前**插入：
+
+```c
+{
+  struct circular_buf *tx_ring = (struct circular_buf *)SF32LB52_BT_TX_BUF_ADDR;
+  tx_ring->read_idx_mirror  = 0;
+  tx_ring->write_idx_mirror = 0;
+}
+```
+
+**为什么**：紧跟其后的注释写着「让 LCPU 看到重置后的下标
+（read_idx=write_idx=0）」，**但那段代码只做了 cache 回写，从来没有写过那两个
+0**。`up_clean_dcache()` 是把 cache 内容推到 SRAM，上一次会话残留的写指针
+因此原样存活，环看起来是满的。
+
+现场日志：
+
+```
+sf32lb52 bt: LCPU up in 1460 ms
+hci_initialize: ERROR: BT_HCI_OP_RESET failed: -110
+sf32lb52 bt tx busy: rd=00000000 wr=00040000
+```
+
+`sf32lb52_host_send_packet()` 开头的 `sf32lb52_bt_wait_tx_idle()` 一看环非空
+就直接返回错误 —— 命令**根本没写进环**，所以连 Reset 都超时。
+
 ## 可选改动
 
 ### 2. `vendor/sifli/boards/sf32lb52/lckfb_huangshan_pi/configs/nsh/defconfig`

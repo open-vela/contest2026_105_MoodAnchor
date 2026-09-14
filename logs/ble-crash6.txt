@@ -1,3 +1,65 @@
 
 === [00:43:16] port opened ===
 [00:43:16] SFBL
+[00:43:18] AB[00:43:18] CD[0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc0 init done, ret=0
+[0m[00:43:19] [0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc1 init[00:43:19] [0mINFO: LSM6DS3 test device registered as /dev/lsm6dsl0, INT=31
+[0m[0m[33mWARN: skip HAL_FLASH_Init during XIP bringup, NOR write/erase disabled
+[0m[0mINFO: NOR MTD registered at /dev/config0 (offset=2464 blocks=1024)
+[0m[00:43:21] mood_anchor [8:100]
+
+NuttShell (NSH)
+nsh> [K[0m[31;1m[LVGL] [User]	(2.700, +2700)	 check_stack_size: tid: 8, Stack size : 40856 lv_nuttx_entry.c:283
+[0m[0m[31;1m[LVGL] [User]	(2.703, +3)	 lv_nuttx_lcd_create: lcd /dev/lcd0 opening lv_nuttx_lcd.c:77
+[0m[0m[31;1m[LVGL] [User]	(2.705, +2)	 lv_nuttx_lcd_create: lcd /dev/lcd0 open success lv_nuttx_lcd.c:84
+[0m[0m[31;1m[LVGL] [User]	(2.717, +12)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 opening lv_nuttx_touchscreen.c:79
+[0m[31;1m[LVGL] [User]	(2.721, +4)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 open success, maxpoint 1 lv_nuttx_touchscreen.c:98
+[0m[00:43:21] [ui] 1
+MoodAnchor UI running (swipe for VITALS / MOTION / LINK)
+[00:43:22] mood: microphone started
+[00:43:24] [ui] 5
+[00:43:26] [ui] 9
+[00:43:28] [ui] 13
+[00:43:29] mood: agitation marked a false alarm (0/1)
+[00:43:30] [ui] 17
+[00:43:32] [ui] 21
+[00:43:34] [ui] 25
+[00:43:36] [ui] 29
+[00:43:38] [ui] 33
+[00:43:41] [ui] 37
+[00:43:43] [ui] 41
+[00:43:46] sf32lb52 bt: LCPU up in 1560 ms
+[ui] 45
+[00:43:46] dump_assert_info: Current Version: NuttX  0.0.0 5f713dc903a-dirty Sep 14 2026 23:23:18 arm
+dump_assert_info: Assertion failed padfault.c:186 task: mood_anchor process: mood_anchor 0x12072f55
+u1 R6: 120b003e  R7: 60065c38
+up_0 SP: 60065a40 LR: 12015235  PC: 12015235
+up_dump_register: xPSR: 00000000
+up_dump_register: EXC_RETURN: 00000000
+sched_dumpstack: backtrace|15: 0x12027e64 0x12014cb6 0x12015376 0x12013a9e 0x12013574 0x12018dc2
+dump_tasks:    PID GROUP PRI POLICY   TYPE    NPX STATE   EVENT      SIGMASK          STACKBASE  STACKSIZE   COMMAND
+dump_task:       0     0   0 FIFO     Kthread -   Ready              0000000000000000 0x2001453c      1968   CPU0 IDLE
+dump_task:       1     0 224 RR       Kthread -   Waiting Signal     0000000000000000 0x200059b0     15968   hpwork 0x200004c0 0x20000508
+dump_task:       2     0 100 RR       Kthread -   Waiting Semaphore  0000000000000000 0x20009890     15968   lpwork 0x20000540 0x20000588
+dump_task:      19     0 100 RR       Kthread -   Waiting Signal     0000000000000000 0x60065ea0      8088   BT_HCI_Tx
+dump_task:       5     5 100 RR       Task    -   Waiting Semaphore  0000000000000000 0x2001f390     15992   nsh_main
+R       Task    -   Ready              fffffffffff7fdff 0x60000078     40856   mood_anchor
+dump_task:       9     8 100 RR       pthread -   Waiting Signal     0000000000000000 0x2007d278      4016   mood_anchor 0x12073e11 0
+dump_task:      10     8 100 RR       pthread -   Waiting Signal     0000000000000000 0x2007e398      2992   mood_anchor 0x1207     0000000000000000 0x2007f090      2992   mood_anchor 0x12074dump_task:      12     8 100 RR       pthread -   Waiting Signal     0000000000000000 0x6005fb88      2992   mood_anchor 0x120741b9 0
+dump_task:      13     8 100 RR       pthread -   Waiting Signal     0000000000000000 0x60060790      2992   mood_anchor 0x12073fb5 0x100101
+[00:43:50] dump_task:       0    -1   0 FIFO     Task    -   ������������������������������� 0000000000000000 0x60061398      2992   mood_a000000000000000 0x60063e80      8112   mood_anchor 0x12072f55 0
+0: 0x12027a26 0x12014f42
+sched_dumpstack: backtrace| 1: 0x12015a74 0x12019c5c 0x12061578 0x1204f68a 0x12029406 0x12016db2 0x12016eac 0x120168f4
+sched_dumpstack: 0x12015a74 0x12015c4c 0x12016eee 0x120168f4
+sched_dumpstack: backtrace|19: 0x12015a74 0x12019c5c 0x12061578 0x1204f68a 0x120295sched_dumpstack: backtrace| 5: 0x12015a74 0x12015c4c 0x12030d1a 0x1203ed70 0x1203edb2 0x1203edd6 0x1203edfe 0x1201c0f2
+sched_dumpstack: backtrace| 5: 0x1201c1dc 0x1201c16a 0x12020966 0x1201c05a 0x1201b3e2 0x1204c6b8 0x120168sched_dumpstack: backtrace| 8: 0x12015a74 0x12015c4c 0x12060d78 0x1203ecb8 0x120a2760 0x120a1a54 0x1207525c 0x1204c6b8
+sched_dumpstack: backtrace| 8: 0x120168e0sched_dumpstack: backtrace| 9: 0x12015a74 0x12019c5c 0x12061578 64 0x120a8054
+sched_dumpstack: backtrace|10: 0x12015a74 0x12019c5c 0x12061578 0x1204f626 0x12073f74 0x120a5e64 0x120a8054
+sched_ 0x120741a4 0x120a5e64 0x120a8054
+sched_dumpstack: backtrace|12:sched_dumpstack: backtrace|13: 0x12015a74 0x12019c5c 0x12061578 0x1204f68a 0x12073fda 0x120a5e64 0x120a8054
+sched_dumpstack: backtrace| 0: 0x12027a26 0x12014f42014cb6 0x12015964 0x1201539c 0x12013a9e 0x12013574 0x12018dc2
+
+=== [00:43:56] NO OUTPUT for 6 s ===
