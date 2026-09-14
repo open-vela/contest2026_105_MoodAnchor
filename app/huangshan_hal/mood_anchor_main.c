@@ -356,7 +356,7 @@ static void ma_refresh_ble_ui(void)
         lv_label_set_text(g_lbl_ble_state, "ON");
         lv_obj_set_style_text_color(g_lbl_ble_state, lv_color_hex(MA_COLOR_ACCENT),
                                     0);
-        if (hs_ble_host_conn_handle() == 0xffff)
+        if (!hs_ble_gatt_peer_connected())
           {
             lv_label_set_text_fmt(g_lbl_ble_info,
                                   "Advertising as %s\nwaiting for a phone",

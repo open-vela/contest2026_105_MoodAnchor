@@ -410,13 +410,21 @@ static uint8_t  g_srsp_len;
  * Private Functions
  ****************************************************************************/
 
+static volatile bool g_peer_connected;
+
+bool hs_ble_gatt_peer_connected(void)
+{
+  return g_peer_connected;
+}
+
 static void hs_ble_ccc_cfg_changed(uint16_t value)
 {
-  /* No action required: the stack keeps the per peer configuration and
-   * bt_gatt_notify() picks it up.
+  /* The stack keeps the per-peer CCC configuration and bt_gatt_notify()
+   * picks it up.  We only track whether some peer has subscribed (used as
+   * the "phone connected" signal for the UI).
    */
 
-  (void)value;
+  g_peer_connected = (value != 0);
 }
 
 /****************************************************************************

@@ -259,6 +259,17 @@ int hs_ble_adv_enable(bool enable);
 bool hs_ble_gatt_ready(void);
 
 /****************************************************************************
+ * Name: hs_ble_gatt_peer_connected
+ *
+ * Description:
+ *   True once a peer has subscribed to the event characteristic's CCC.
+ *   Used by the UI as the "phone connected" signal.
+ *
+ ****************************************************************************/
+
+bool hs_ble_gatt_peer_connected(void);
+
+/****************************************************************************
  * Name: hs_ble_event_notify
  *
  * Description:
