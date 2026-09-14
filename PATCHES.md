@@ -113,26 +113,25 @@ HAL_Delay_us(10 * 1000);      /* 20 次 × 10 ms = 单次调用阻塞约 200 ms 
 **效果**：超时退回成本来的语义 —— 一次失败，`hs_ble_host_start()` 的 3 次重试
 机会得以生效，而不是停机。
 
-### 7. `vendor/sifli/chips/sf32lb52/sf32lb52_bth4.c` — `open()` 阶段就拉起 LCPU
+### 7. `vendor/sifli/chips/sf32lb52/sf32lb52_bt_adapter.c` — LCPU 启动耗时打印
 
-`sf32lb52_bt_open()` 里，在 `sf32lb52_hci_register_callback()` 之后补上
-`sf32lb52_bt_controller_enable()`。
+`sf32lb52_bt_controller_enable()` 里加了一行：
 
-**为什么**：LCPU 原本是**懒启动**的 —— `sf32lb52_bt_send()` 在发第一条命令前
-才调 `sf32lb52_bt_ensure_controller_enabled()`。于是整个 LCPU 启动过程
-（`lcpu_power_on()` + 500 ms wake sleep + `ipc_queue_open()` + 最多 1 s 的
-`sf32lb52_bt_wait_rx_ring_ready()`）全都花在 host 给**单个同步命令**的
-2.5 s 预算里（`TIMEOUT_MSEC`）。冷上电时这笔开销吃满甚至超出预算，Reset 的
-回包就落在超时之后 —— 正是第 6 条那个断言停机的触发条件。
+```c
+printf("sf32lb52 bt: LCPU up in %lu ms\n",
+       (unsigned long)(HAL_GetTick() - t0));
+```
 
-`open()` 不在任何超时窗口内，启动开销应该花在这里。改完之后 `send()` 路径里的
-enable 检查退化为立即返回。顺带这也让 ring buffer 的 `read=write` 同步发生在
-host 开始发命令**之前**，而不是第一条命令的发送途中。
+注意本板 **`CONFIG_SYSLOG_CHAR` / `CONFIG_SYSLOG_CONSOLE` 都没开**，该文件里
+原有的 `syslog()` 全是黑洞，所以这里必须用 `printf`（并补
+`#include <stdio.h>`）。
 
-配套：`sf32lb52_bt_adapter.c` 的 `sf32lb52_bt_controller_enable()` 里加了
-`printf("sf32lb52 bt: LCPU up in %lu ms")`。注意本板 **`CONFIG_SYSLOG_CHAR` /
-`CONFIG_SYSLOG_CONSOLE` 都没开**，该文件里原有的 `syslog()` 全部是黑洞，
-所以这里必须用 `printf`（并补 `#include <stdio.h>`）。
+> **试过但已撤回**：曾把 `sf32lb52_bt_controller_enable()` 从 `send()` 路径
+> （懒启动）提到 `sf32lb52_bt_open()` 里，想让 LCPU 启动不占用同步命令的
+> 2.5 s 超时预算。实测反而更容易卡死，已还原成懒启动。
+> **不要**再从 `open()` 里调用 `sf32lb52_bt_controller_enable()`。
+
+`sf32lb52_bth4.c` 的 `sf32lb52_bt_open()` 里保留了说明这一点的注释。
 
 ## 可选改动
 

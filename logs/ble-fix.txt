@@ -1,0 +1,186 @@
+
+=== [22:43:48] port opened ===
+[22:43:48] SFBL
+[22:43:50] AB[22:43:50] CD[0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc0 init done, ret=0
+[0m[22:43:50] [0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc1 init done, ret=0
+[0m[22:43:51] [0mINFO: LSM6DS3 test device registered as /dev/lsm6dsl0, INT=31
+[0m[0m[33mWARN: skip HAL_FLASH_Init during XIP bringup, NOR write/erase disabled
+[0m[0mINFO: NOR MTD registered at /dev/config0 (offset=2464 blocks=1024)
+[0m[22:43:53] mood_anchor [8:100]
+
+NuttShell (NSH)
+nsh> [K[0m[31;1m[LVGL] [User]	(2.700, +2700)	 check_stack_size: tid: 8, Stack size : 40856 lv_nuttx_entry.c:283
+[0m[0m[31;1m[LVGL] [User]	(2.703, +3)	 lv_nuttx_lcd_create: lcd /dev/lcd0 opening lv_nuttx_lcd.c:77
+[0m[0m[31;1m[LVGL] [User]	(2.705, +2)	 lv_nuttx_lcd_create: lcd /dev/lcd0 open success lv_nuttx_lcd.c:84
+[0m[0m[31;1m[LVGL] [User]	(2.718, +13)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 opening lv_nuttx_touchscreen.c:79
+[0m[0m[31;1m[LVGL] [User]	(2.721, +3)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 open success, maxpoint 1 lv_nuttx_touchscreen.c:98
+[0m[22:43:53] [ui] 1
+MoodAnchor UI running (swipe for VITALS / MOTION / LINK)
+[22:43:54] mood: microphone started
+[22:43:55] [ui] 5
+[22:43:57] [ui] 9
+[22:43:59] [ui] 13
+[22:44:01] [ui] 17
+[22:44:03] [ui] 21
+[22:44:05] [ui] 25
+[22:44:07] [ui] 29
+[22:44:09] [ui] 33
+[22:44:11] [ui] 37
+[22:44:13] [ui] 41
+[22:44:15] [ui] 45
+[22:44:17] [ui] 49
+[22:44:19] [ui] 53
+[22:44:22] [ui] 57
+[22:44:24] [ui] 61
+[22:44:26] [ui] 65
+[22:44:28] [ui] 69
+[22:44:30] [ui] 73
+[22:44:32] [ui] 77
+[22:44:34] [ui] 81
+[22:44:36] [ui] 85
+[22:44:38] [ui] 89
+[22:44:40] [ui] 93
+[22:44:42] [ui] 97
+[22:44:44] [ui] 101
+[22:44:46] [ui] 105
+[22:44:48] [ui] 109
+[22:44:50] [ui] 113
+[22:44:52] [ui] 117
+[22:44:54] [ui] 121
+[22:44:57] [ui] 125
+[22:44:59] [ui] 129
+[22:45:01] [ui] 133
+[22:45:03] [ui] 137
+[22:45:05] [ui] 141
+[22:45:07] [ui] 145
+[22:45:09] [ui] 149
+[22:45:11] [ui] 153
+[22:45:13] [ui] 157
+[22:45:15] [ui] 161
+[22:45:17] [ui] 165
+[22:45:19] [ui] 169
+[22:45:21] [ui] 173
+[22:45:23] [ui] 177
+[22:45:25] [ui] 181
+[22:45:27] [ui] 185
+[22:45:29] [ui] 189
+[22:45:31] [ui] 193
+[22:45:33] [ui] 197
+[22:45:35] [ui] 201
+[22:45:37] [ui] 205
+[22:45:39] [ui] 209
+[22:45:41] [ui] 213
+[22:45:43] [ui] 217
+[22:45:45] [ui] 221
+[22:45:47] [ui] 225
+[22:45:49] [ui] 229
+[22:45:51] [ui] 233
+[22:45:53] [ui] 237
+[22:45:56] [ui] 241
+[22:45:58] [ui] 245
+[22:46:00] [ui] 249
+
+=== [22:46:02] port lost: device reports readiness to read but returned no data (device disconnected or multiple access on port?) ===
+
+=== [22:47:28] port opened ===
+[22:47:28] SFBL
+[22:47:30] ABCD[0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc0 init done, ret=0
+[0m[22:47:31] [0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc1 init[22:47:31] [0mINFO: LSM6DS3 test device registered as /dev/lsm6dsl0, INT=31
+[0m[0m[33mWARN: skip HAL_FLASH_Init during XIP bringup, NOR write/erase disabled
+[0m[0mINFO: NOR MTD registered at /dev/config0 (offset=2464 blocks=1024)
+[0m[22:47:33] mood_anchor [8:100]
+
+NuttShell (NSH)
+nsh> [K[0m[31;1m[LVGL] [User]	(2.700, +2700)	 check_stack_size: tid: 8, Stack size : 40856 lv_nuttx_entry.c:283
+[0m[0m[31;1m[LVGL] [User]	(2.703, +3)	 lv_nuttx_lcd_create: lcd /dev/lcd0 opening lv_nuttx_lcd.c:77
+[0m[0m[31;1m[LVGL] [User]	(2.705, +2)	 lv_nuttx_lcd_create: lcd /dev/lcd0 open success lv_nuttx_lcd.c:8[0m[31;1m[LVGL] [User]	(2.718, +13)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 opening lv_nuttx_touchscreen.c:79
+[0m[0m[31;1m[LVGL] [User]	(2.722, +4)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 open success, maxpoint 1 lv_nuttx_touchscreen.c:98
+[0m[22:47:33] [ui] 1
+MoodAnchor UI running (swipe for VITALS / MOTION / LINK)
+[22:47:34] mood: microphone started
+[22:47:35] [ui] 5
+[22:47:38] [ui] 9
+[22:47:40] [ui] 13
+[22:47:42] [ui] 17
+[22:47:44] [ui] 21
+[22:47:46] [ui] 25
+[22:47:48] [ui] 29
+[22:47:50] [ui] 33
+[22:47:52] [ui] 37
+[22:47:54] [ui] 41
+[22:47:56] [ui] 45
+[22:47:58] [ui] 49
+[22:48:00] [ui] 53
+[22:48:02] [ui] 57
+[22:48:04] [ui] 61
+[22:48:07] [ui] 65
+[22:48:09] [ui] 69
+[22:48:11] [ui] 73
+[22:48:13] [ui] 77
+[22:48:15] [ui] 81
+[22:48:17] [ui] 85
+[22:48:19] [ui] 89
+[22:48:21] [ui] 93
+[22:48:23] [ui] 97
+[22:48:25] [ui] 101
+[22:48:27] [ui] 105
+[22:48:29] [ui] 109
+[22:48:31] [ui] 113
+[22:48:33] [ui] 117
+[22:48:35] [ui] 121
+[22:48:37] [ui] 125
+[22:48:39] [ui] 129
+[22:48:41] [ui] 133
+[22:48:44] [ui] 137
+[22:48:46] [ui] 141
+[22:48:48] [ui] 145
+[22:48:50] [ui] 149
+[22:48:52] [ui] 153
+[22:48:54] [ui] 157
+[22:48:56] [ui] 161
+[22:48:58] [ui] 165
+[22:49:00] [ui] 169
+[22:49:02] [ui] 173
+[22:49:04] [ui] 177
+[22:49:06] [ui] 181
+[22:49:08] [ui] 185
+[22:49:11] [ui] 189
+[22:49:13] [ui] 193
+[22:49:15] [ui] 197
+[22:49:17] [ui] 201
+[22:49:19] [ui] 205
+[22:49:21] [ui] 209
+[22:49:23] [ui] 213
+[22:49:25] [ui] 217
+[22:49:27] [ui] 221
+[22:49:29] [ui] 225
+[22:49:31] [ui] 229
+[22:49:33] [ui] 233
+[22:49:35] [ui] 237
+[22:49:37] [ui] 241
+[22:49:39] [ui] 245
+[22:49:41] [ui] 249
+[22:49:43] [ui] 253
+[22:49:45] [ui] 257
+[22:49:47] [ui] 261
+[22:49:50] [ui] 265
+[22:49:52] [ui] 269
+[22:49:54] [ui] 273
+[22:49:56] [ui] 277
+[22:49:58] [ui] 281
+[22:50:00] [ui] 285
+[22:50:02] [ui] 289
+[22:50:04] [ui] 293
+[22:50:06] [ui] 297
+[22:50:08] [ui] 301
+[22:50:10] [ui] 305
+[22:50:12] [ui] 309
+[22:50:14] [ui] 313

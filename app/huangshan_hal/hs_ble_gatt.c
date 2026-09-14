@@ -80,10 +80,6 @@ extern int bt_stop_advertising(void);
 #define HS_H_DATA_VAL           0x0017
 #define HS_H_DATA_CCC           0x0018
 
-#define HS_H_STATUS_CHRC        0x0019
-#define HS_H_STATUS_VAL         0x001a
-#define HS_H_STATUS_CCC         0x001b
-
 #define HS_H_DIS_SVC            0x0020
 #define HS_H_DIS_MANUF_CHRC     0x0021
 #define HS_H_DIS_MANUF_VAL      0x0022
@@ -216,17 +212,11 @@ static struct bt_uuid_s g_uuid_data =
   }
 };
 
-/* d38a0005-1234-5678-9abc-def012345678 (full device status) */
-
-static struct bt_uuid_s g_uuid_status =
-{
-  .type = BT_UUID_128,
-  .u.u128 =
-  {
-    0x05, 0x00, 0x8a, 0xd3, 0x34, 0x12, 0x78, 0x56,
-    0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0xf0, 0xde
-  }
-};
+/* d38a0005-1234-5678-9abc-def012345678 was the separate "full device status"
+ * characteristic.  Its one useful byte - the fused verdict - now travels as
+ * the last byte of the data packet, so the characteristic and its UUID are
+ * gone.
+ */
 
 static struct bt_uuid_s g_uuid_dis =
 {
@@ -320,13 +310,6 @@ static struct bt_gatt_chrc_s g_chrc_data =
   .uuid         = &g_uuid_data,
 };
 
-static struct bt_gatt_chrc_s g_chrc_status =
-{
-  .properties   = BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
-  .value_handle = HS_H_STATUS_VAL,
-  .uuid         = &g_uuid_status,
-};
-
 static struct bt_gatt_chrc_s g_chrc_dis_manuf =
 {
   .properties   = BT_GATT_CHRC_READ,
@@ -374,7 +357,6 @@ static struct bt_gatt_chrc_s g_chrc_bas_level =
 static struct bt_gatt_ccc_cfg_s g_ccc_sc[1];
 static struct bt_gatt_ccc_cfg_s g_ccc_event[1];
 static struct bt_gatt_ccc_cfg_s g_ccc_data[1];
-static struct bt_gatt_ccc_cfg_s g_ccc_status[1];
 static struct bt_gatt_ccc_cfg_s g_ccc_battery[1];
 
 /* Characteristic values --------------------------------------------------- */
@@ -386,7 +368,6 @@ static uint8_t  g_event_pkt[HS_BLE_EVENT_LEN];
 static uint16_t g_event_seq;
 
 static uint8_t  g_data_pkt[HS_BLE_DATA_LEN];
-static uint8_t  g_status_pkt[HS_BLE_STATUS_LEN];
 
 static uint8_t  g_ctrl[HS_BLE_CTRL_MAX];
 static size_t   g_ctrl_len;
@@ -536,14 +517,6 @@ static int hs_ble_read_data(FAR struct bt_conn_s *conn,
                            sizeof(g_data_pkt));
 }
 
-static int hs_ble_read_status(FAR struct bt_conn_s *conn,
-                              FAR const struct bt_gatt_attr_s *attr,
-                              FAR void *buf, uint8_t len, uint16_t offset)
-{
-  return bt_gatt_attr_read(conn, attr, buf, len, offset, g_status_pkt,
-                           sizeof(g_status_pkt));
-}
-
 static int hs_ble_read_string(FAR struct bt_conn_s *conn,
                               FAR const struct bt_gatt_attr_s *attr,
                               FAR void *buf, uint8_t len, uint16_t offset)
@@ -675,11 +648,6 @@ static const struct bt_gatt_attr_s g_attrs[] =
   BT_GATT_DESCRIPTOR(HS_H_DATA_VAL, &g_uuid_data, BT_GATT_PERM_READ,
                      hs_ble_read_data, NULL, NULL),
   BT_GATT_CCC(HS_H_DATA_CCC, HS_H_DATA_VAL, g_ccc_data,
-              hs_ble_ccc_cfg_changed),
-  BT_GATT_CHARACTERISTIC(HS_H_STATUS_CHRC, &g_chrc_status),
-  BT_GATT_DESCRIPTOR(HS_H_STATUS_VAL, &g_uuid_status, BT_GATT_PERM_READ,
-                     hs_ble_read_status, NULL, NULL),
-  BT_GATT_CCC(HS_H_STATUS_CCC, HS_H_STATUS_VAL, g_ccc_status,
               hs_ble_ccc_cfg_changed),
 
   /* Device Information Service */
@@ -1083,6 +1051,11 @@ int hs_ble_data_notify(const struct hs_ble_sample_s *sample)
       flags |= HS_BLE_DATA_IMU_VALID;
     }
 
+  if (sample->gsr_ready)
+    {
+      flags |= HS_BLE_DATA_GSR_READY;
+    }
+
   g_data_pkt[0]  = HS_BLE_DATA_VERSION;
   g_data_pkt[1]  = flags;
   g_data_pkt[2]  = sample->gsr_valid ? (uint8_t)(sample->gsr_mv & 0xff) : 0;
@@ -1112,6 +1085,14 @@ int hs_ble_data_notify(const struct hs_ble_sample_s *sample)
     {
       memset(&g_data_pkt[8], 0, 8);
     }
+
+  /* The fused verdict, last byte of the same packet.  Confidence is clipped
+   * to the low seven bits so that bit 7 alone answers "agitated?" - a client
+   * that only cares about that does not have to know the scale.
+   */
+
+  g_data_pkt[16] = (uint8_t)((sample->agitated ? HS_BLE_DATA_AGITATED : 0) |
+                             (sample->confidence & HS_BLE_DATA_CONF_MASK));
 
   /* Keep the standard Battery Service in step so a client can subscribe to
    * either one.  Only notify when the value actually changes: a percentage
@@ -1143,56 +1124,6 @@ int hs_ble_data_notify(const struct hs_ble_sample_s *sample)
 const uint8_t *hs_ble_data_last(void)
 {
   return g_data_pkt;
-}
-
-int hs_ble_status_notify(const struct hs_ble_mood_s *mood)
-{
-  struct timespec ts;
-  uint32_t        now;
-
-  if (!g_gatt_installed)
-    {
-      return -ENOTCONN;
-    }
-
-  if (mood == NULL)
-    {
-      return -EINVAL;
-    }
-
-  /* Monotonic milliseconds.  The phone only needs ordering and durations, and
-   * this device has no reliable wall clock.
-   */
-
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  now = (uint32_t)(ts.tv_sec * 1000u + ts.tv_nsec / 1000000u);
-
-  g_status_pkt[0]  = HS_BLE_STATUS_VERSION;
-  g_status_pkt[1]  = mood->agitated ? HS_BLE_MOOD_AGITATED : HS_BLE_MOOD_CALM;
-  g_status_pkt[2]  = mood->confidence;
-  g_status_pkt[3]  = mood->flags;
-  g_status_pkt[4]  = (uint8_t)(now & 0xff);
-  g_status_pkt[5]  = (uint8_t)((now >> 8) & 0xff);
-  g_status_pkt[6]  = (uint8_t)((now >> 16) & 0xff);
-  g_status_pkt[7]  = (uint8_t)((now >> 24) & 0xff);
-  g_status_pkt[8]  = mood->imu_score;
-  g_status_pkt[9]  = mood->mic_score;
-  g_status_pkt[10] = mood->gsr_score;
-  g_status_pkt[11] = 0;
-
-  /* Same guard as the data characteristic: no peer means nothing to send. */
-
-  if (g_peer_connected)
-    {
-      bt_gatt_notify(HS_H_STATUS_VAL, g_status_pkt, sizeof(g_status_pkt));
-    }
-
-  return OK;
-}
-
-const uint8_t *hs_ble_status_last(void)
-{
-  return g_status_pkt;
 }
 
 void hs_ble_adv_service(void)

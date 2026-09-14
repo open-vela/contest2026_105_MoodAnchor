@@ -2517,7 +2517,6 @@ static void ma_mood_prompt(void)
 static FAR void *ma_ble_data_thread(FAR void *arg)
 {
   struct hs_ble_sample_s  sample;
-  struct hs_ble_mood_s    mood;
   struct hs_mood_input_s  input;
   struct hs_mood_result_s result;
 
@@ -2628,39 +2627,19 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
           (void)hs_buttons_read(&g_btn, &state);
         }
 
-      mood.agitated   = result.agitated;
-      mood.confidence = (uint8_t)result.confidence;
-      mood.imu_score  = (uint8_t)result.imu_score;
-      mood.mic_score  = (uint8_t)result.mic_score;
-      mood.gsr_score  = (uint8_t)result.gsr_score;
-      mood.flags      = 0;
+      /* The verdict rides in the same packet as the sample it was derived
+       * from, so there is no second characteristic to publish.  The
+       * per-sensor scores stay on the watch - they are what the MOOD page
+       * and the confirmation prompt show, and putting them on the wire was
+       * the part the phone never used.
+       */
 
-      if (result.gsr_ready)
-        {
-          mood.flags |= HS_BLE_MOOD_GSR_READY;
-        }
-
-      if (result.imu_positive)
-        {
-          mood.flags |= HS_BLE_MOOD_IMU_POSITIVE;
-        }
-
-      if (result.mic_positive)
-        {
-          mood.flags |= HS_BLE_MOOD_MIC_POSITIVE;
-        }
-
-      if (result.gsr_positive)
-        {
-          mood.flags |= HS_BLE_MOOD_GSR_POSITIVE;
-        }
+      sample.gsr_ready  = result.gsr_ready;
+      sample.agitated   = result.agitated;
+      sample.confidence = (uint8_t)result.confidence;
 
       hs_ble_trace(HS_BLE_TRACE_SEND_DATA);
       hs_ble_data_notify(&sample);
-
-      hs_ble_trace(HS_BLE_TRACE_SEND_STAT);
-      hs_ble_status_notify(&mood);
-
       hs_ble_trace(HS_BLE_TRACE_SENT);
 
       /* The controller stops advertising as soon as a phone connects and

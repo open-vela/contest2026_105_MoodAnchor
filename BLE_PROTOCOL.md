@@ -38,11 +38,14 @@ d38a0001-1234-5678-9abc-def012345678
 |---|---|---|---|
 | **Event** | `d38a0002-…` | Notify | 11 字节事件包（跌倒/SOS 等离散事件） |
 | **Control** | `d38a0003-…` | Write | 手机下行命令，1–16 字节 |
-| **Data** | `d38a0004-…` | Notify | 16 字节传感器样本（IMU/麦克风/皮电/电量） |
-| **Status** | `d38a0005-…` | Notify | 12 字节**融合后的情绪状态** |
+| **Data** | `d38a0004-…` | Notify | 17 字节：传感器样本 + 融合后的情绪判定 |
 
-两者的分工很明确：**Status 是结论，Data 是原始值**。手机做通知只需订阅 Status，
-需要画曲线或做本地复算再订阅 Data。
+只有一个周期推送的特征：**原始值和结论在同一包里**。末字节是结论
+（是否激动 + 置信度），前 16 字节是得出它的那三路信号。
+
+早期版本把结论单独放在 `d38a0005` 上，拆包拆出了一个 12 字节的 Status
+包和第二个通知，实际用不上它的时间戳与三个 score，反而让每秒多走一趟
+发送路径，已合并。
 
 另外还装了三个标准服务（可直接用系统 API 读，也可以忽略）：
 
@@ -85,10 +88,10 @@ event type 取值：
 | `0x06` | 电量低 |
 | `0xff` | 自检 / 台架测试 |
 
-### 3.2 Data（`…0004`，16 字节）
+### 3.2 Data（`…0004`，17 字节）—— 传感器样本 + 情绪判定
 
 实时传感器样本，**约 1 Hz** 推送。这是"简洁发一下"的那包：四个传感器的当前值
-各占几个字节，不含任何统计量。
+各占几个字节，不含任何统计量，末字节是融合结论。
 
 | 偏移 | 长度 | 字段 | 说明 |
 |---|---|---|---|
@@ -103,6 +106,7 @@ event type 取值：
 | 10 | 2 | accel Y | 毫克（int16 LE） |
 | 12 | 2 | accel Z | 毫克（int16 LE） |
 | 14 | 2 | gyro | 角速度**幅值**，0.1°/s（uint16 LE） |
+| 16 | 1 | **mood** | bit7 = 激动，bit0–6 = 置信度 0–100 |
 
 flags 位定义：
 
@@ -114,37 +118,17 @@ flags 位定义：
 | 3 | `0x08` | 心率有效 |
 | 4 | `0x10` | 血氧有效 |
 | 5 | `0x20` | IMU 有效 |
+| 6 | `0x40` | 皮电就绪（已佩戴且已采基线） |
+
+末字节把结论和它依据的原始值放在同一个包、同一个时刻：`bit7` 单独就能
+回答"激不激动"，不看低位的置信度也能用。
 
 > **无效的字段会被填写为 0**，所以不看 flags 会把"没有数据"当成真实的 0。
 > 麦克风的 0–100 是**相对刻度**（详见 §3.5），不是声压级。
 
-### 3.3 Status（`…0005`，12 字节）—— **融合后的情绪状态**
+### 3.3 融合后的"激动"是怎么判出来的
 
-这是手机端应该拿去触发通知的那一包：**多传感器置信融合后的"是否激动"**。
-
-| 偏移 | 长度 | 字段 | 说明 |
-|---|---|---|---|
-| 0 | 1 | version | 固定 `0x01` |
-| 1 | 1 | **state** | `0x00` 平静 / `0x01` **激动** |
-| 2 | 1 | confidence | 融合置信度 0–100 |
-| 3 | 1 | flags | 见下 |
-| 4 | 4 | timestamp | 单调毫秒（uint32 LE） |
-| 8 | 1 | IMU score | IMU 证据 0–100 |
-| 9 | 1 | mic score | 麦克风证据 0–100 |
-| 10 | 1 | GSR score | 皮电证据 0–100 |
-| 11 | 1 | reserved | 固定 `0` |
-
-flags 位定义：
-
-| 位 | 值 | 含义 |
-|---|---|---|
-| 0 | `0x01` | 皮电就绪（已佩戴且已采基线） |
-| 1 | `0x02` | IMU 判定阳性 |
-| 2 | `0x04` | 麦克风判定阳性 |
-| 3 | `0x08` | 皮电判定阳性 |
-
-三个 score 一起发出来，是为了让手机能看到**是哪个传感器在驱动这个判断** ——
-对接调试时两边不一致，一眼就能看出是哪一路的问题。
+结论就在 Data 包的第 16 字节，不需要额外特征。判定细节见 §3.5。
 
 ### 3.4 Control（`…0003`，手机 → 手表）
 
@@ -156,7 +140,7 @@ flags 位定义：
 | `0x02` | CLEAR | 无（清除当前挂起的事件） |
 | `0x03` | INTERVAL | 字节 1 = 上报周期（秒） |
 
-### 3.5 Status 里的"激动"是怎么判出来的
+### 3.5 "激动"是怎么判出来的
 
 三个传感器各自先算出一个 0–100 的**置信分**：
 
@@ -204,7 +188,7 @@ IMU 和麦克风的分各做一次**漏积分平滑**（时间常数约 3 秒 / 
 3. device.connectGatt()                    连接
 4. gatt.discoverServices()                 服务发现
 5. getService(d38a0001-...)                取自定义服务
-6. 对 0004 / 0005 两个特征：
+6. 对 0004 一个特征：
      gatt.setCharacteristicNotification(ch, true)
      再往 CCCD (00002902-0000-1000-8000-00805f9b34fb) 写
      ENABLE_NOTIFICATION_VALUE = {0x01, 0x00}
@@ -219,7 +203,6 @@ IMU 和麦克风的分各做一次**漏积分平滑**（时间常数约 3 秒 / 
 ```kotlin
 val SVC = UUID.fromString("d38a0001-1234-5678-9abc-def012345678")
 val CH_DATA   = UUID.fromString("d38a0004-1234-5678-9abc-def012345678")
-val CH_STATUS = UUID.fromString("d38a0005-1234-5678-9abc-def012345678")
 val CCCD = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
 private fun le16(b: ByteArray, o: Int) =
@@ -235,22 +218,8 @@ override fun onCharacteristicChanged(
 ) {
     when (ch.uuid) {
 
-        // 结论：融合后的情绪状态，做通知用这个
-        CH_STATUS -> {
-            if (value.size < 12 || value[0] != 0x01.toByte()) return
-            val agitated   = value[1].toInt() == 0x01
-            val confidence = value[2].toInt() and 0xFF
-            val flags      = value[3].toInt() and 0xFF
-            val gsrReady   = flags and 0x01 != 0
-            val imuScore   = value[8].toInt() and 0xFF
-            val micScore   = value[9].toInt() and 0xFF
-            val gsrScore   = value[10].toInt() and 0xFF
-            // if (agitated) 触发"疑似情绪激动"通知
-        }
-
-        // 原始值：画曲线或本地复算用这个
         CH_DATA -> {
-            if (value.size < 16 || value[0] != 0x01.toByte()) return
+            if (value.size < 17 || value[0] != 0x01.toByte()) return
             val f = value[1].toInt() and 0xFF
 
             val gsr      = if (f and 0x01 != 0) le16(value, 2) else null
@@ -265,6 +234,13 @@ override fun onCharacteristicChanged(
                 val az = sle16(value, 12)
                 val gyroDps = le16(value, 14) / 10.0   // 角速度幅值，单位 °/s
             }
+
+            // 同一个包里的结论，直接拿去触发通知
+            val mood       = value[16].toInt() and 0xFF
+            val agitated   = (mood and 0x80) != 0
+            val confidence = mood and 0x7F
+            val gsrReady   = (f and 0x40) != 0
+            // if (agitated) 触发“疑似情绪激动”通知
         }
     }
 }
@@ -280,7 +256,7 @@ override fun onCharacteristicChanged(
 - **不要用系统蓝牙列表找设备**（原因见第 1 节），必须用 App 扫描。
 - **断连后手机会停止收到通知**，因为 CCCD 绑定在连接上；重连后需要**重新订阅**。
   手表侧会在断连后自动恢复广播，可以直接重连。
-- **Data / Status 是约 1 Hz 的周期推送**，不是每个样本都推。想改频率可以写 Control
+- **Data 是约 1 Hz 的周期推送**，不是每个样本都推。想改频率可以写 Control
   的 `0x03` 命令。
 - **无效字段会被填成 0**，必须看 flags 再决定用不用。麦克风、皮电在没有数据时和
   真实的 0 长得一模一样。
@@ -289,8 +265,8 @@ override fun onCharacteristicChanged(
 - **GSR 的"是否佩戴"是手表本地判定的**，蓝牙发的是原始毫伏值。判据是**电压高于
   1500 mV 表示未佩戴**（详见 `WIRING.md` §3.1）—— 手机若要自己显示佩戴状态，
   需要按同样的阈值判断，否则会和表端不一致。
-- **"激动"这个结论是手表算的**（规则见 §3.5）。如果手机想用自己的模型复算，订阅
-  Data 拿原始三路信号即可，Status 里的三个 score 也可以作为参考。
+- **"激动"这个结论是手表算的**（规则见 §3.5），就在 Data 包的第 16 字节。
+  如果手机想用自己的模型复算，同一包里就有原始三路信号。
 - **Event 包是 fire-and-forget**：除非 flags 的 bit0 置位，否则不需要回 ACK。
 - **改协议要注意版本字节**：两个包的 byte 0 都是版本号，格式变了就改它，手机端可以
   据此拒绝解析老固件发来的包。
