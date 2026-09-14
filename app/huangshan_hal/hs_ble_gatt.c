@@ -1006,20 +1006,96 @@ int hs_ble_event_notify(uint8_t type, uint8_t risk, uint8_t confidence,
   return (int)g_event_seq;
 }
 
-int hs_ble_data_notify(uint16_t gsr_mv, uint8_t hr_bpm, uint8_t spo2,
-                       uint8_t flags)
+int hs_ble_data_notify(const struct hs_ble_sample_s *sample)
 {
+  uint8_t flags = 0;
+
   if (!g_gatt_installed)
     {
       return -ENOTCONN;
     }
 
-  g_data_pkt[0] = (uint8_t)(gsr_mv & 0xff);
-  g_data_pkt[1] = (uint8_t)(gsr_mv >> 8);
-  g_data_pkt[2] = hr_bpm;
-  g_data_pkt[3] = spo2;
-  g_data_pkt[4] = flags;
-  g_data_pkt[5] = 0;
+  if (sample == NULL)
+    {
+      return -EINVAL;
+    }
+
+  /* A field whose validity flag is clear is sent as an explicit zero, so a
+   * phone that ignores the flags reads an obvious "nothing here" rather than
+   * a stale number.
+   */
+
+  if (sample->gsr_valid)
+    {
+      flags |= HS_BLE_DATA_GSR_VALID;
+    }
+
+  if (sample->mic_valid)
+    {
+      flags |= HS_BLE_DATA_MIC_VALID;
+    }
+
+  if (sample->bat_valid)
+    {
+      flags |= HS_BLE_DATA_BAT_VALID;
+    }
+
+  if (sample->hr_valid)
+    {
+      flags |= HS_BLE_DATA_HR_VALID;
+    }
+
+  if (sample->spo2_valid)
+    {
+      flags |= HS_BLE_DATA_SPO2_VALID;
+    }
+
+  if (sample->imu_valid)
+    {
+      flags |= HS_BLE_DATA_IMU_VALID;
+    }
+
+  g_data_pkt[0]  = HS_BLE_DATA_VERSION;
+  g_data_pkt[1]  = flags;
+  g_data_pkt[2]  = sample->gsr_valid ? (uint8_t)(sample->gsr_mv & 0xff) : 0;
+  g_data_pkt[3]  = sample->gsr_valid ? (uint8_t)(sample->gsr_mv >> 8) : 0;
+  g_data_pkt[4]  = sample->mic_valid ? sample->mic_level : 0;
+  g_data_pkt[5]  = sample->bat_valid ? sample->battery
+                                     : HS_BLE_STATUS_BAT_UNKNOWN;
+  g_data_pkt[6]  = sample->hr_valid ? sample->hr_bpm : 0;
+  g_data_pkt[7]  = sample->spo2_valid ? sample->spo2 : 0;
+
+  if (sample->imu_valid)
+    {
+      int i;
+
+      for (i = 0; i < 3; i++)
+        {
+          uint16_t raw = (uint16_t)sample->accel_mg[i];
+
+          g_data_pkt[8 + i * 2] = (uint8_t)(raw & 0xff);
+          g_data_pkt[9 + i * 2] = (uint8_t)(raw >> 8);
+        }
+
+      g_data_pkt[14] = (uint8_t)(sample->gyro_dps10 & 0xff);
+      g_data_pkt[15] = (uint8_t)(sample->gyro_dps10 >> 8);
+    }
+  else
+    {
+      memset(&g_data_pkt[8], 0, 8);
+    }
+
+  /* Keep the standard Battery Service in step so a client can subscribe to
+   * either one.  Only notify when the value actually changes: a percentage
+   * rarely moves, and unsolicited traffic keeps an idle phone awake.
+   */
+
+  if (sample->bat_valid && sample->battery != HS_BLE_STATUS_BAT_UNKNOWN &&
+      sample->battery != g_battery)
+    {
+      g_battery = sample->battery;
+      bt_gatt_notify(HS_H_BAS_LEVEL_VAL, &g_battery, sizeof(g_battery));
+    }
 
   /* No-op unless a peer has written the data CCC descriptor */
 
@@ -1032,53 +1108,40 @@ const uint8_t *hs_ble_data_last(void)
   return g_data_pkt;
 }
 
-int hs_ble_status_notify(uint16_t gsr_mv, uint8_t hr_bpm, uint8_t spo2,
-                         const int16_t accel_mg[3], uint8_t battery,
-                         uint8_t buttons, bool vibration, uint8_t flags)
+int hs_ble_status_notify(const struct hs_ble_mood_s *mood)
 {
+  struct timespec ts;
+  uint32_t        now;
+
   if (!g_gatt_installed)
     {
       return -ENOTCONN;
     }
 
-  g_status_pkt[0] = HS_BLE_STATUS_VERSION;
-  g_status_pkt[1] = flags;
-  g_status_pkt[2] = (uint8_t)(gsr_mv & 0xff);
-  g_status_pkt[3] = (uint8_t)(gsr_mv >> 8);
-  g_status_pkt[4] = hr_bpm;
-  g_status_pkt[5] = spo2;
-
-  if (accel_mg != NULL)
+  if (mood == NULL)
     {
-      uint8_t i;
-
-      for (i = 0; i < 3; i++)
-        {
-          g_status_pkt[6 + i * 2] = (uint8_t)(accel_mg[i] & 0xff);
-          g_status_pkt[7 + i * 2] = (uint8_t)((uint16_t)accel_mg[i] >> 8);
-        }
-    }
-  else
-    {
-      memset(&g_status_pkt[6], 0, 6);
+      return -EINVAL;
     }
 
-  g_status_pkt[12] = battery;
-  g_status_pkt[13] = buttons;
-  g_status_pkt[14] = vibration ? 1 : 0;
-  g_status_pkt[15] = 0;
-
-  /* Keep the standard Battery Service in step with the packed status so a
-   * client can subscribe to either one.  Only notify when the value
-   * actually changes: a percentage rarely moves and unsolicited traffic
-   * would keep an idle phone awake.
+  /* Monotonic milliseconds.  The phone only needs ordering and durations, and
+   * this device has no reliable wall clock.
    */
 
-  if (battery != HS_BLE_STATUS_BAT_UNKNOWN && battery != g_battery)
-    {
-      g_battery = battery;
-      bt_gatt_notify(HS_H_BAS_LEVEL_VAL, &g_battery, sizeof(g_battery));
-    }
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  now = (uint32_t)(ts.tv_sec * 1000u + ts.tv_nsec / 1000000u);
+
+  g_status_pkt[0]  = HS_BLE_STATUS_VERSION;
+  g_status_pkt[1]  = mood->agitated ? HS_BLE_MOOD_AGITATED : HS_BLE_MOOD_CALM;
+  g_status_pkt[2]  = mood->confidence;
+  g_status_pkt[3]  = mood->flags;
+  g_status_pkt[4]  = (uint8_t)(now & 0xff);
+  g_status_pkt[5]  = (uint8_t)((now >> 8) & 0xff);
+  g_status_pkt[6]  = (uint8_t)((now >> 16) & 0xff);
+  g_status_pkt[7]  = (uint8_t)((now >> 24) & 0xff);
+  g_status_pkt[8]  = mood->imu_score;
+  g_status_pkt[9]  = mood->mic_score;
+  g_status_pkt[10] = mood->gsr_score;
+  g_status_pkt[11] = 0;
 
   /* No-op unless a peer has written the status CCC descriptor */
 

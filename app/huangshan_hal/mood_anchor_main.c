@@ -51,6 +51,7 @@
 #include "hs_ble.h"
 #include "hs_ppg.h"
 #include "hs_mic.h"
+#include "hs_mood.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -249,18 +250,22 @@ static pthread_t        g_ppg_thread;
 static volatile bool    g_sys_run;
 static pthread_t        g_sys_thread;
 static pthread_t        g_mic_thread;
+static pthread_t        g_gsr_thread;
 
 /* Latest samples */
 
-/* Latest GSR reading and the classification parameters.  All of these are
- * only ever touched from the UI thread, so plain variables are enough.
+/* Latest GSR reading and the classification parameters.
+ *
+ * These cross threads now: the sampling thread writes the reading, the UI
+ * thread reads it for the label and writes the baseline, and the BLE thread
+ * reads both for the fusion.  Hence the volatile.
  */
 
-static int32_t g_gsr_mv;
-static bool    g_gsr_valid;
-static int32_t g_gsr_rest;                    /* resting baseline, 0 = unset */
-static int32_t g_gsr_band = MA_GSR_BAND_DEFAULT;
-static volatile int g_gsr_class = MA_GSR_NO_ELECTRODE;
+static volatile int32_t g_gsr_mv;
+static volatile bool    g_gsr_valid;
+static volatile int32_t g_gsr_rest;           /* baseline, 0 = unset */
+static volatile int32_t g_gsr_band = MA_GSR_BAND_DEFAULT;
+static volatile int     g_gsr_class = MA_GSR_NO_ELECTRODE;
 
 static uint32_t g_hr_bpm;
 static uint32_t g_spo2;
@@ -1395,6 +1400,78 @@ static void ma_read_system(void)
 }
 
 /****************************************************************************
+ * Name: ma_gsr_thread
+ *
+ * Description:
+ *   Sample the skin conductance continuously.
+ *
+ *   This used to be read from the UI timer, which by design only refreshes
+ *   the page on screen - so the signal simply stopped arriving whenever the
+ *   Mood page was swiped away.  The multi-sensor fusion needs it all the
+ *   time, and so does the BLE sample stream.
+ *
+ *   5 Hz is plenty: skin conductance is one of the slowest biosignals there
+ *   is, and the module itself has a time constant of seconds.
+ *
+ ****************************************************************************/
+
+static FAR void *ma_gsr_thread(FAR void *arg)
+{
+  struct hs_gsr_sample_s sample;
+
+  (void)arg;
+
+  while (g_sys_run)
+    {
+      if (!g_gsr_open)
+        {
+          if (hs_gsr_open(&g_gsr) < 0)
+            {
+              usleep(500000);
+              continue;
+            }
+
+          g_gsr_open = true;
+        }
+
+      if (hs_gsr_read(&g_gsr, &sample) == 0)
+        {
+          g_gsr_mv     = sample.adc_mv;
+          g_gsr_valid  = true;
+          g_ble_gsr_mv = sample.adc_mv;
+          g_ble_gsr_ok = 1;
+        }
+
+      usleep(200000);
+    }
+
+  return NULL;
+}
+
+/****************************************************************************
+ * Name: ma_gsr_start
+ ****************************************************************************/
+
+static void ma_gsr_start(void)
+{
+  pthread_attr_t attr;
+
+  if (pthread_attr_init(&attr) != 0)
+    {
+      return;
+    }
+
+  pthread_attr_setstacksize(&attr, 3072);
+
+  if (pthread_create(&g_gsr_thread, &attr, ma_gsr_thread, NULL) == 0)
+    {
+      pthread_detach(g_gsr_thread);
+    }
+
+  pthread_attr_destroy(&attr);
+}
+
+/****************************************************************************
  * Name: ma_read_gsr
  ****************************************************************************/
 
@@ -1404,35 +1481,14 @@ static void ma_read_gsr(void)
   static int32_t last_mv    = -1;
   static int32_t last_rest  = -1;
   static int32_t last_band  = -1;
-  struct hs_gsr_sample_s sample;
   int32_t mv;
   int     class;
 
-  if (!g_gsr_open)
+  if (!g_gsr_valid)
     {
-      if (hs_gsr_open(&g_gsr) < 0)
-        {
-          lv_label_set_text(g_lbl_mood_state, "/dev/adc1 not available");
-          return;
-        }
-
-      g_gsr_open = true;
-    }
-
-  if (hs_gsr_read(&g_gsr, &sample) < 0)
-    {
+      lv_label_set_text(g_lbl_mood_state, "waiting for /dev/adc1");
       return;
     }
-
-  g_gsr_mv    = sample.adc_mv;
-  g_gsr_valid = true;
-
-  /* Keep the raw reading flowing to the BLE characteristics: the phone gets
-   * the sample, the classification stays a local decision.
-   */
-
-  g_ble_gsr_mv = sample.adc_mv;
-  g_ble_gsr_ok = 1;
 
   mv = g_gsr_mv;
 
@@ -1873,47 +1929,78 @@ static void ma_ppg_start(void)
 
 static FAR void *ma_ble_data_thread(FAR void *arg)
 {
+  struct hs_ble_sample_s  sample;
+  struct hs_ble_mood_s    mood;
+  struct hs_mood_input_s  input;
+  struct hs_mood_result_s result;
+
   (void)arg;
+
+  hs_mood_init();
 
   while (g_ble_data_run)
     {
-      uint8_t  flags  = 0;
-      uint8_t  sflags = 0;
-      int16_t  accel[3] = { 0, 0, 0 };
-      uint8_t  battery = HS_BLE_STATUS_BAT_UNKNOWN;
-      uint8_t  buttons = 0;
-      bool     vib     = false;
+      memset(&sample, 0, sizeof(sample));
+      memset(&input, 0, sizeof(input));
 
-      if (g_ble_gsr_ok)
-        {
-          flags  |= HS_BLE_DATA_GSR_VALID;
-          sflags |= HS_BLE_STATUS_GSR_VALID;
-        }
+      /* Skin conductance.  The sampling thread already has the electrode
+       * voltage; the interpretation is done here so the "not worn" threshold
+       * stays in one place.  Note the sensor drives the electrodes with a
+       * constant current, so a *rise* in conductance shows up as a *fall* in
+       * voltage - hence baseline minus current.
+       */
 
-      if (g_ble_vitals_ok)
-        {
-          flags  |= HS_BLE_DATA_HR_VALID | HS_BLE_DATA_SPO2_VALID;
-          sflags |= HS_BLE_STATUS_HR_VALID | HS_BLE_STATUS_SPO2_VALID;
-        }
+      input.gsr_ready = g_gsr_valid && g_gsr_rest > 0 &&
+                        g_gsr_mv <= MA_GSR_NO_ELECTRODE_MV;
+      input.gsr_delta = g_gsr_rest - g_gsr_mv;
+      input.gsr_band  = g_gsr_band;
+
+      sample.gsr_valid = g_gsr_valid;
+      sample.gsr_mv    = (uint16_t)g_gsr_mv;
+
+      /* Microphone: the driver publishes a relative 0..100 level, which is
+       * exactly the scale the fusion wants.
+       */
+
+      input.mic_level  = hs_mic_level();
+      sample.mic_valid = g_mic_ok;
+      sample.mic_level = (uint8_t)input.mic_level;
 
       /* Motion: the IMU thread owns the sensor, so read the published sample
-       * rather than issuing a blocking read on the same descriptor.
+       * rather than issuing a blocking read on the same descriptor.  The
+       * driver reports the gyro in milli-degrees per second; the fusion and
+       * the packet both want tenths of a degree, so the scaling happens once,
+       * here.
        */
 
       pthread_mutex_lock(&g_imu_lock);
       if (g_imu_valid)
         {
-          accel[0] = g_imu_sample.accel_x_mg;
-          accel[1] = g_imu_sample.accel_y_mg;
-          accel[2] = g_imu_sample.accel_z_mg;
-          sflags  |= HS_BLE_STATUS_IMU_VALID;
+          input.accel_mg[0] = g_imu_sample.accel_x_mg;
+          input.accel_mg[1] = g_imu_sample.accel_y_mg;
+          input.accel_mg[2] = g_imu_sample.accel_z_mg;
+          input.gyro_dps10[0] = (int16_t)(g_imu_sample.gyro_x_mdps / 100);
+          input.gyro_dps10[1] = (int16_t)(g_imu_sample.gyro_y_mdps / 100);
+          input.gyro_dps10[2] = (int16_t)(g_imu_sample.gyro_z_mdps / 100);
+
+          sample.imu_valid = true;
+          sample.accel_mg[0] = g_imu_sample.accel_x_mg;
+          sample.accel_mg[1] = g_imu_sample.accel_y_mg;
+          sample.accel_mg[2] = g_imu_sample.accel_z_mg;
         }
       pthread_mutex_unlock(&g_imu_lock);
 
-      /* Battery: the UI timer owns the ADC and publishes the reading in
-       * g_vbat_mv, so this thread only has to map it to a percentage.  It
-       * used to trigger its own conversion on the same node, which
-       * disturbed the UI's and vice versa.
+      /* Vitals ride along on the same packet; they are not part of the
+       * arousal decision, but the phone already knows what to do with them.
+       */
+
+      sample.hr_valid   = g_ble_vitals_ok != 0;
+      sample.hr_bpm     = g_ble_hr;
+      sample.spo2_valid = g_ble_vitals_ok != 0;
+      sample.spo2       = g_ble_spo2;
+
+      /* Battery: the sampling thread owns the ADC and publishes the reading
+       * in g_vbat_mv, so this thread only has to map it to a percentage.
        */
 
       if (g_vbat_mv > 0)
@@ -1925,42 +2012,69 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
           if (pct < 0)   { pct = 0; }
           if (pct > 100) { pct = 100; }
 
-          battery  = (uint8_t)pct;
-          sflags  |= HS_BLE_STATUS_BAT_VALID;
+          sample.bat_valid = true;
+          sample.battery   = (uint8_t)pct;
+        }
+      else
+        {
+          sample.bat_valid = false;
         }
 
-      vib = false;
+      /* --- fusion ------------------------------------------------------- */
+
+      hs_mood_update(&input, &result);
+
+      sample.gyro_dps10 = (uint16_t)result.gyro_mag_dps10;
+
+      /* Buttons and the vibration motor are no longer part of the payload,
+       * but polling them here is what keeps the SYSTEM page's sensor
+       * inventory honest - a node that exists but never answers should show
+       * up as IDLE rather than as working.
+       */
+
       if (g_vib_open || hs_vibration_open(&g_vib) >= 0)
         {
           g_vib_open = true;
-          vib        = hs_vibration_is_enabled(&g_vib);
+          (void)hs_vibration_is_enabled(&g_vib);
         }
-
-      if (vib)
-        {
-          sflags |= HS_BLE_STATUS_VIB_ON;
-        }
-
-      /* Buttons: bit map of the currently pressed keys (0 = none). */
 
       if (g_btn_open || hs_buttons_open(&g_btn, HS_BUTTONS_DEVICE) >= 0)
         {
           uint32_t state = 0;
 
           g_btn_open = true;
-
-          if (hs_buttons_read(&g_btn, &state) >= 0)
-            {
-              buttons  = (uint8_t)(state & 0xff);
-              sflags  |= HS_BLE_STATUS_BTN_VALID;
-            }
+          (void)hs_buttons_read(&g_btn, &state);
         }
 
-      hs_ble_data_notify((uint16_t)g_ble_gsr_mv, g_ble_hr, g_ble_spo2,
-                         flags);
-      hs_ble_status_notify((uint16_t)g_ble_gsr_mv, g_ble_hr, g_ble_spo2,
-                           (sflags & HS_BLE_STATUS_IMU_VALID) ? accel : NULL,
-                           battery, buttons, vib, sflags);
+      mood.agitated   = result.agitated;
+      mood.confidence = (uint8_t)result.confidence;
+      mood.imu_score  = (uint8_t)result.imu_score;
+      mood.mic_score  = (uint8_t)result.mic_score;
+      mood.gsr_score  = (uint8_t)result.gsr_score;
+      mood.flags      = 0;
+
+      if (result.gsr_ready)
+        {
+          mood.flags |= HS_BLE_MOOD_GSR_READY;
+        }
+
+      if (result.imu_positive)
+        {
+          mood.flags |= HS_BLE_MOOD_IMU_POSITIVE;
+        }
+
+      if (result.mic_positive)
+        {
+          mood.flags |= HS_BLE_MOOD_MIC_POSITIVE;
+        }
+
+      if (result.gsr_positive)
+        {
+          mood.flags |= HS_BLE_MOOD_GSR_POSITIVE;
+        }
+
+      hs_ble_data_notify(&sample);
+      hs_ble_status_notify(&mood);
 
       /* The controller stops advertising as soon as a phone connects and
        * never resumes it by itself: re-arm it after a disconnect.
@@ -2218,6 +2332,7 @@ int main(int argc, FAR char *argv[])
   ma_sys_start();
   ma_mic_start();
   ma_imu_start();
+  ma_gsr_start();
 
   /* Bluetooth stays off until the LINK page switch is touched.  Bringing the
    * host stack up costs a burst of synchronous HCI traffic, and starting it

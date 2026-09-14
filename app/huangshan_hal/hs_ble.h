@@ -56,52 +56,67 @@
 #define HS_BLE_EVENT_LEN        11
 #define HS_BLE_EVENT_VERSION    0x01
 
-/* Live sample packet written to the data characteristic (6 bytes):
- *
- *   byte 0-1 : skin conductance in mV   (uint16, little endian)
- *   byte 2   : heart rate in bpm        (uint8, 0 = invalid)
- *   byte 3   : SpO2 in %                (uint8, 0 = invalid)
- *   byte 4   : flags (see below)
- *   byte 5   : reserved (0)
- */
-
-#define HS_BLE_DATA_LEN         6
-
-#define HS_BLE_DATA_GSR_VALID   0x01
-#define HS_BLE_DATA_HR_VALID    0x02
-#define HS_BLE_DATA_SPO2_VALID  0x04
-#define HS_BLE_DATA_SIMULATED   0x80
-
-/****************************************************************************
- * Device status packet (characteristic ...0005)
+/* Live sensor sample, written to the data characteristic (...0004):
  *
  *   byte 0    : version (0x01)
- *   byte 1    : flags (see HS_BLE_STATUS_* below)
+ *   byte 1    : flags (see HS_BLE_DATA_* below)
  *   byte 2-3  : skin conductance in mV   (uint16, little endian)
- *   byte 4    : heart rate in bpm        (uint8, 0 = invalid)
- *   byte 5    : SpO2 in %                (uint8, 0 = invalid)
- *   byte 6-7  : acceleration X in mg     (int16, little endian)
- *   byte 8-9  : acceleration Y in mg     (int16, little endian)
- *   byte 10-11: acceleration Z in mg     (int16, little endian)
- *   byte 12   : battery percent 0..100   (0xff = unknown)
- *   byte 13   : button bitmap
- *   byte 14   : vibration motor (0/1)
- *   byte 15   : reserved (0)
+ *   byte 4    : microphone level, 0..100
+ *   byte 5    : battery percent, 0xff = unknown
+ *   byte 6    : heart rate in bpm        (uint8, 0 = invalid)
+ *   byte 7    : SpO2 in %                (uint8, 0 = invalid)
+ *   byte 8-9  : acceleration X in mg     (int16, little endian)
+ *   byte 10-11: acceleration Y in mg     (int16, little endian)
+ *   byte 12-13: acceleration Z in mg     (int16, little endian)
+ *   byte 14-15: rotation magnitude, tenths of a degree/s (uint16, LE)
  *
- * Pushed once per second on the status characteristic, together with the
- * compact 6 byte sensor packet on ...0004.
+ * The microphone level is a relative figure, not a sound pressure level: mic
+ * bias, sensitivity and gain all differ between units, so it is only
+ * meaningful against its own recent history.
  */
 
-#define HS_BLE_STATUS_LEN        16
+#define HS_BLE_DATA_LEN          16
+#define HS_BLE_DATA_VERSION      0x01
+
+#define HS_BLE_DATA_GSR_VALID    0x01
+#define HS_BLE_DATA_MIC_VALID    0x02
+#define HS_BLE_DATA_BAT_VALID    0x04
+#define HS_BLE_DATA_HR_VALID     0x08
+#define HS_BLE_DATA_SPO2_VALID   0x10
+#define HS_BLE_DATA_IMU_VALID    0x20
+
+/****************************************************************************
+ * Fused mood state (characteristic ...0005)
+ *
+ * This is the headline the phone acts on: whether the wearer currently looks
+ * agitated, decided by fusing three independent sensors.  The raw values
+ * behind the decision travel separately on the data characteristic.
+ *
+ *   byte 0    : version (0x01)
+ *   byte 1    : state, HS_BLE_MOOD_CALM / HS_BLE_MOOD_AGITATED
+ *   byte 2    : fused confidence, 0..100
+ *   byte 3    : flags (see HS_BLE_MOOD_* below)
+ *   byte 4-7  : timestamp, milliseconds (uint32, little endian)
+ *   byte 8    : IMU score, 0..100
+ *   byte 9    : microphone score, 0..100
+ *   byte 10   : skin conductance score, 0..100
+ *   byte 11   : reserved (0)
+ *
+ * The three scores are reported alongside the verdict so the phone can see
+ * *which* sensor drove it, and so a disagreement between the two sides is
+ * easy to diagnose.
+ */
+
+#define HS_BLE_STATUS_LEN        12
 #define HS_BLE_STATUS_VERSION    0x01
 
-#define HS_BLE_STATUS_GSR_VALID  0x01
-#define HS_BLE_STATUS_HR_VALID   0x02
-#define HS_BLE_STATUS_SPO2_VALID 0x04
-#define HS_BLE_STATUS_IMU_VALID  0x08
-#define HS_BLE_STATUS_BAT_VALID  0x10
-#define HS_BLE_STATUS_BTN_VALID  0x20
-#define HS_BLE_STATUS_VIB_ON     0x40
+#define HS_BLE_MOOD_CALM         0x00
+#define HS_BLE_MOOD_AGITATED     0x01
+
+#define HS_BLE_MOOD_GSR_READY    0x01    /* baseline captured, pads on skin */
+#define HS_BLE_MOOD_IMU_POSITIVE 0x02
+#define HS_BLE_MOOD_MIC_POSITIVE 0x04
+#define HS_BLE_MOOD_GSR_POSITIVE 0x08
 
 #define HS_BLE_STATUS_BAT_UNKNOWN 0xff
 
@@ -355,6 +370,50 @@ uint16_t hs_ble_event_seq(void);
 size_t hs_ble_control_last(uint8_t *buf, size_t buflen);
 
 /****************************************************************************
+ * Public Types
+ ****************************************************************************/
+
+/* Everything that goes into one data packet.  Grouped into a structure
+ * rather than passed as eight positional arguments, because half of them are
+ * validity flags and mixing those up silently is the easiest mistake to make
+ * on this interface.
+ */
+
+struct hs_ble_sample_s
+{
+  bool     gsr_valid;
+  uint16_t gsr_mv;
+
+  bool     mic_valid;
+  uint8_t  mic_level;           /* 0..100, relative */
+
+  bool     bat_valid;
+  uint8_t  battery;             /* HS_BLE_STATUS_BAT_UNKNOWN when unknown */
+
+  bool     hr_valid;
+  uint8_t  hr_bpm;
+
+  bool     spo2_valid;
+  uint8_t  spo2;
+
+  bool     imu_valid;
+  int16_t  accel_mg[3];
+  uint16_t gyro_dps10;          /* rotation magnitude, tenths of a degree/s */
+};
+
+/* The fused verdict plus the evidence behind it. */
+
+struct hs_ble_mood_s
+{
+  bool    agitated;
+  uint8_t confidence;           /* 0..100 */
+  uint8_t flags;                /* HS_BLE_MOOD_* */
+  uint8_t imu_score;            /* 0..100, per-sensor evidence */
+  uint8_t mic_score;
+  uint8_t gsr_score;
+};
+
+/****************************************************************************
  * Name: hs_ble_data_notify
  *
  * Description:
@@ -364,10 +423,8 @@ size_t hs_ble_control_last(uint8_t *buf, size_t buflen);
  *   subscribed yet.
  *
  * Input Parameters:
- *   gsr_mv - skin conductance in mV
- *   hr_bpm - heart rate (0 when unknown)
- *   spo2   - blood oxygen in % (0 when unknown)
- *   flags  - HS_BLE_DATA_* bits describing which values are valid
+ *   sample - the values to send; the flags are derived from it, and any
+ *            field whose validity flag is false is sent as zero
  *
  * Returned Value:
  *   Zero on success, a negated errno value when the host or the GATT
@@ -375,8 +432,7 @@ size_t hs_ble_control_last(uint8_t *buf, size_t buflen);
  *
  ****************************************************************************/
 
-int hs_ble_data_notify(uint16_t gsr_mv, uint8_t hr_bpm, uint8_t spo2,
-                       uint8_t flags);
+int hs_ble_data_notify(const struct hs_ble_sample_s *sample);
 
 /****************************************************************************
  * Name: hs_ble_data_last
@@ -392,28 +448,18 @@ const uint8_t *hs_ble_data_last(void);
  * Name: hs_ble_status_notify
  *
  * Description:
- *   Publish the full device status packet (HS_BLE_STATUS_LEN bytes) on the
- *   status characteristic (Notify): sensors, motion, battery and button
- *   state in a single frame.  Nothing happens when no peer subscribed yet.
+ *   Publish the fused mood packet (HS_BLE_STATUS_LEN bytes) on the status
+ *   characteristic (Notify).  Nothing happens when no peer subscribed yet.
  *
  * Input Parameters:
- *   gsr_mv    - skin conductance in mV
- *   hr_bpm    - heart rate (0 when unknown)
- *   spo2      - blood oxygen in % (0 when unknown)
- *   accel_mg  - 3 axis acceleration in mg, may be NULL
- *   battery   - 0..100, or HS_BLE_STATUS_BAT_UNKNOWN
- *   buttons   - button bitmap
- *   vibration - true when the vibration motor is running
- *   flags     - HS_BLE_STATUS_* validity bits
+ *   mood - the verdict and the per-sensor scores behind it
  *
  * Returned Value:
  *   Zero on success, a negated errno value otherwise.
  *
  ****************************************************************************/
 
-int hs_ble_status_notify(uint16_t gsr_mv, uint8_t hr_bpm, uint8_t spo2,
-                         const int16_t accel_mg[3], uint8_t battery,
-                         uint8_t buttons, bool vibration, uint8_t flags);
+int hs_ble_status_notify(const struct hs_ble_mood_s *mood);
 
 /****************************************************************************
  * Name: hs_ble_status_last

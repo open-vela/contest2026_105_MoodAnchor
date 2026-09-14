@@ -36,10 +36,13 @@ d38a0001-1234-5678-9abc-def012345678
 
 | 特征 | UUID | 属性 | 内容 |
 |---|---|---|---|
-| **Event** | `d38a0002-…` | Notify | 11 字节事件包 |
+| **Event** | `d38a0002-…` | Notify | 11 字节事件包（跌倒/SOS 等离散事件） |
 | **Control** | `d38a0003-…` | Write | 手机下行命令，1–16 字节 |
-| **Data** | `d38a0004-…` | Notify | 6 字节实时传感器包 |
-| **Status** | `d38a0005-…` | Notify | 16 字节完整状态包 |
+| **Data** | `d38a0004-…` | Notify | 16 字节传感器样本（IMU/麦克风/皮电/电量） |
+| **Status** | `d38a0005-…` | Notify | 12 字节**融合后的情绪状态** |
+
+两者的分工很明确：**Status 是结论，Data 是原始值**。手机做通知只需订阅 Status，
+需要画曲线或做本地复算再订阅 Data。
 
 另外还装了三个标准服务（可直接用系统 API 读，也可以忽略）：
 
@@ -82,50 +85,66 @@ event type 取值：
 | `0x06` | 电量低 |
 | `0xff` | 自检 / 台架测试 |
 
-### 3.2 Data（`…0004`，6 字节）
+### 3.2 Data（`…0004`，16 字节）
 
-实时传感器样本，**约 1 Hz** 推送。
-
-| 偏移 | 长度 | 字段 | 说明 |
-|---|---|---|---|
-| 0 | 2 | GSR | 皮肤电，毫伏（uint16 LE） |
-| 2 | 1 | heart rate | bpm，`0` = 无效 |
-| 3 | 1 | SpO2 | 百分比，`0` = 无效 |
-| 4 | 1 | flags | `0x01`=GSR 有效 `0x02`=HR 有效 `0x04`=SpO2 有效 `0x80`=模拟数据 |
-| 5 | 1 | reserved | 固定 `0` |
-
-**必须看 flags 再决定用不用该字段** —— 传感器没数据时值为 0。
-
-### 3.3 Status（`…0005`，16 字节）
-
-完整状态快照，**约 1 Hz** 推送，和 Data 包同时发出。
+实时传感器样本，**约 1 Hz** 推送。这是"简洁发一下"的那包：四个传感器的当前值
+各占几个字节，不含任何统计量。
 
 | 偏移 | 长度 | 字段 | 说明 |
 |---|---|---|---|
 | 0 | 1 | version | 固定 `0x01` |
 | 1 | 1 | flags | 见下 |
-| 2 | 2 | GSR | 毫伏（uint16 LE） |
-| 4 | 1 | heart rate | bpm，`0` = 无效 |
-| 5 | 1 | SpO2 | 百分比，`0` = 无效 |
-| 6 | 2 | accel X | 毫克（int16 **有符号** LE） |
-| 8 | 2 | accel Y | 毫克（int16 LE） |
-| 10 | 2 | accel Z | 毫克（int16 LE） |
-| 12 | 1 | battery | 电量百分比；`0xff` = 未知 |
-| 13 | 1 | buttons | 按键位图 |
-| 14 | 1 | vibration | 马达 0/1 |
-| 15 | 1 | reserved | 固定 `0` |
+| 2 | 2 | GSR | 皮肤电，毫伏（uint16 LE） |
+| 4 | 1 | mic level | 麦克风音量，0–100（**相对值**） |
+| 5 | 1 | battery | 电量百分比；`0xff` = 未知 |
+| 6 | 1 | heart rate | bpm，`0` = 无效 |
+| 7 | 1 | SpO2 | 百分比，`0` = 无效 |
+| 8 | 2 | accel X | 毫克（int16 **有符号** LE） |
+| 10 | 2 | accel Y | 毫克（int16 LE） |
+| 12 | 2 | accel Z | 毫克（int16 LE） |
+| 14 | 2 | gyro | 角速度**幅值**，0.1°/s（uint16 LE） |
 
 flags 位定义：
 
 | 位 | 值 | 含义 |
 |---|---|---|
 | 0 | `0x01` | GSR 有效 |
-| 1 | `0x02` | 心率有效 |
-| 2 | `0x04` | 血氧有效 |
-| 3 | `0x08` | 加速度有效 |
-| 4 | `0x10` | 电量有效 |
-| 5 | `0x20` | 按键有效 |
-| 6 | `0x40` | 马达正在振动 |
+| 1 | `0x02` | 麦克风有效 |
+| 2 | `0x04` | 电量有效 |
+| 3 | `0x08` | 心率有效 |
+| 4 | `0x10` | 血氧有效 |
+| 5 | `0x20` | IMU 有效 |
+
+> **无效的字段会被填写为 0**，所以不看 flags 会把"没有数据"当成真实的 0。
+> 麦克风的 0–100 是**相对刻度**（详见 §3.5），不是声压级。
+
+### 3.3 Status（`…0005`，12 字节）—— **融合后的情绪状态**
+
+这是手机端应该拿去触发通知的那一包：**多传感器置信融合后的"是否激动"**。
+
+| 偏移 | 长度 | 字段 | 说明 |
+|---|---|---|---|
+| 0 | 1 | version | 固定 `0x01` |
+| 1 | 1 | **state** | `0x00` 平静 / `0x01` **激动** |
+| 2 | 1 | confidence | 融合置信度 0–100 |
+| 3 | 1 | flags | 见下 |
+| 4 | 4 | timestamp | 单调毫秒（uint32 LE） |
+| 8 | 1 | IMU score | IMU 证据 0–100 |
+| 9 | 1 | mic score | 麦克风证据 0–100 |
+| 10 | 1 | GSR score | 皮电证据 0–100 |
+| 11 | 1 | reserved | 固定 `0` |
+
+flags 位定义：
+
+| 位 | 值 | 含义 |
+|---|---|---|
+| 0 | `0x01` | 皮电就绪（已佩戴且已采基线） |
+| 1 | `0x02` | IMU 判定阳性 |
+| 2 | `0x04` | 麦克风判定阳性 |
+| 3 | `0x08` | 皮电判定阳性 |
+
+三个 score 一起发出来，是为了让手机能看到**是哪个传感器在驱动这个判断** ——
+对接调试时两边不一致，一眼就能看出是哪一路的问题。
 
 ### 3.4 Control（`…0003`，手机 → 手表）
 
@@ -136,6 +155,41 @@ flags 位定义：
 | `0x01` | ACK | 无（确认收到最后一个事件） |
 | `0x02` | CLEAR | 无（清除当前挂起的事件） |
 | `0x03` | INTERVAL | 字节 1 = 上报周期（秒） |
+
+### 3.5 Status 里的"激动"是怎么判出来的
+
+三个传感器各自先算出一个 0–100 的**置信分**：
+
+| 传感器 | 分怎么来 | 为什么这样定 |
+|---|---|---|
+| **IMU** | 加速度**矢量幅值**偏离 1 g 的量 + 角速度幅值，除以满量程（3000） | 用幅值而不是单轴，手表怎么戴都不影响；取绝对值，所以"掉落瞬间失去 g"和"甩动"一样算运动 |
+| **麦克风** | 超过底噪门限（45）后线性映射，85 记满分 | 低于门限直接记 0，房间噪声不参与融合 |
+| **皮电** | `(基线 − 当前)` 除以 `2×容差带` | 恒流驱动，**电导升高 = 电压下降**，所以只有电压低于基线才算激动；超过 2 倍容差带记满分 |
+
+IMU 和麦克风的分各做一次**漏积分平滑**（时间常数约 3 秒 / 2 秒），这就是"**剧烈变化**"
+和"**持续高值**"的落实 —— 单次抖动或一声巨响会被平滑稀释掉。皮电本身时间常数就长，
+不再二次滤波。
+
+然后：
+
+```
+融合置信度 = (逼电分×40 + IMU分×30 + 麦克风分×30) / 100
+
+激动 = (融合置信度 >= 55) 且 (三路中至少 2 路判定阳性，即分数 >= 50)
+```
+
+**两个条件是关键**：融合分高说明"强度够"，路数够说明"不止一种传感器注意到了"。
+同时要求两者，单路传感器再怎么飙也点不亮这个标志 —— 这正是"多传感器融合"的意义，
+也是为什么表被磕一下、门被摔一下、电极松一下都不会被报成情绪事件。
+
+确认后至少维持 5 秒（消抖），避免在阈值附近来回跳导致手机反复通知。
+
+阈值和权重都集中在 `app/huangshan_hal/hs_mood.h` 顶部的宏里，可以直接调。
+
+> **说明**：这是**基于规则**的融合，不是训练出来的模型。共享目录里 `mood_gate`
+> 那套冻结模型来自两个不同数据集（PAMAP2 的 IMU、WESAD 的 EDA），其 README 自己
+> 声明不能宣称端到端准确率，且平台层是 `-ENOSYS` 桩。在拿到同源同步数据做盲测之前，
+> 一套**透明可调**的规则比一个来路不明的概率数字更诚实。
 
 ---
 
@@ -173,26 +227,44 @@ private fun le16(b: ByteArray, o: Int) =
 
 private fun sle16(b: ByteArray, o: Int) = le16(b, o).toShort().toInt()
 
+private fun le32(b: ByteArray, o: Int) =
+    le16(b, o) or (le16(b, o + 2) shl 16)
+
 override fun onCharacteristicChanged(
     gatt: BluetoothGatt, ch: BluetoothGattCharacteristic, value: ByteArray
 ) {
     when (ch.uuid) {
-        CH_DATA -> {
-            if (value.size < 6 || value[0] != 0x01.toByte()) return
-            val f = value[4].toInt() and 0xFF
-            val gsr = if (f and 0x01 != 0) le16(value, 0) else null
-            val hr  = if (f and 0x02 != 0) value[2].toInt() and 0xFF else null
-            val spo2= if (f and 0x04 != 0) value[3].toInt() and 0xFF else null
-            // ...
-        }
+
+        // 结论：融合后的情绪状态，做通知用这个
         CH_STATUS -> {
-            if (value.size < 16) return
-            val flags   = value[1].toInt() and 0xFF
-            val batt    = value[12].toInt() and 0xFF   // 0xFF = 未知
-            val ax = if (flags and 0x08 != 0) sle16(value, 6)  else null
-            val ay = if (flags and 0x08 != 0) sle16(value, 8)  else null
-            val az = if (flags and 0x08 != 0) sle16(value, 10) else null
-            // ...
+            if (value.size < 12 || value[0] != 0x01.toByte()) return
+            val agitated   = value[1].toInt() == 0x01
+            val confidence = value[2].toInt() and 0xFF
+            val flags      = value[3].toInt() and 0xFF
+            val gsrReady   = flags and 0x01 != 0
+            val imuScore   = value[8].toInt() and 0xFF
+            val micScore   = value[9].toInt() and 0xFF
+            val gsrScore   = value[10].toInt() and 0xFF
+            // if (agitated) 触发"疑似情绪激动"通知
+        }
+
+        // 原始值：画曲线或本地复算用这个
+        CH_DATA -> {
+            if (value.size < 16 || value[0] != 0x01.toByte()) return
+            val f = value[1].toInt() and 0xFF
+
+            val gsr      = if (f and 0x01 != 0) le16(value, 2) else null
+            val micLevel = if (f and 0x02 != 0) value[4].toInt() and 0xFF else null
+            val battery  = if (f and 0x04 != 0) value[5].toInt() and 0xFF else null
+            val hr       = if (f and 0x08 != 0) value[6].toInt() and 0xFF else null
+            val spo2     = if (f and 0x10 != 0) value[7].toInt() and 0xFF else null
+
+            if (f and 0x20 != 0) {
+                val ax = sle16(value, 8)
+                val ay = sle16(value, 10)
+                val az = sle16(value, 12)
+                val gyroDps = le16(value, 14) / 10.0   // 角速度幅值，单位 °/s
+            }
         }
     }
 }
@@ -208,9 +280,17 @@ override fun onCharacteristicChanged(
 - **不要用系统蓝牙列表找设备**（原因见第 1 节），必须用 App 扫描。
 - **断连后手机会停止收到通知**，因为 CCCD 绑定在连接上；重连后需要**重新订阅**。
   手表侧会在断连后自动恢复广播，可以直接重连。
-- **Data / Status 是约 1 Hz 的周期推送**，不是每个样本都推；想要更高频率可以
-  写 Control 的 `0x03` 命令改上报周期。
-- **GSR 的"是否佩戴"是手表本地判定的**，蓝牙发的是原始毫伏值。判据是
-  **电压高于 1500 mV 表示未佩戴**（详见 `WIRING.md` §3.1）—— 手机端如果要显示
-  佩戴状态，需要自己按这个阈值判断。
+- **Data / Status 是约 1 Hz 的周期推送**，不是每个样本都推。想改频率可以写 Control
+  的 `0x03` 命令。
+- **无效字段会被填成 0**，必须看 flags 再决定用不用。麦克风、皮电在没有数据时和
+  真实的 0 长得一模一样。
+- **麦克风的 0–100 是相对刻度**，不是声压级。麦克风偏置、灵敏度、增益个体差异很大，
+  这个数只对**它自己的历史**有意义。判据是 `WIRING.md` 里的实测标定。
+- **GSR 的"是否佩戴"是手表本地判定的**，蓝牙发的是原始毫伏值。判据是**电压高于
+  1500 mV 表示未佩戴**（详见 `WIRING.md` §3.1）—— 手机若要自己显示佩戴状态，
+  需要按同样的阈值判断，否则会和表端不一致。
+- **"激动"这个结论是手表算的**（规则见 §3.5）。如果手机想用自己的模型复算，订阅
+  Data 拿原始三路信号即可，Status 里的三个 score 也可以作为参考。
 - **Event 包是 fire-and-forget**：除非 flags 的 bit0 置位，否则不需要回 ACK。
+- **改协议要注意版本字节**：两个包的 byte 0 都是版本号，格式变了就改它，手机端可以
+  据此拒绝解析老固件发来的包。
