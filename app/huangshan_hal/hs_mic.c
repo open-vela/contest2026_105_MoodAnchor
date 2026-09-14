@@ -127,3 +127,8 @@ void hs_mic_service(void)
 {
   sf32lb_mic_service();
 }
+
+void hs_mic_dump(void)
+{
+  sf32lb_mic_dump();
+}

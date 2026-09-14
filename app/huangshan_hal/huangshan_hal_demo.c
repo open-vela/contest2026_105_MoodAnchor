@@ -1988,6 +1988,12 @@ int huangshan_hal_demo_main(int argc, char *argv[])
     {
       return hs_demo_mic_stream();
     }
+  if (strcmp(name, "mic_dbg") == 0)
+    {
+      (void)hs_mic_start();
+      hs_mic_dump();
+      return OK;
+    }
   if (strcmp(name, "lcd") == 0)
     {
       return hs_demo_lcd();

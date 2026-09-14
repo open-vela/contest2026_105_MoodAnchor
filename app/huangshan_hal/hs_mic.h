@@ -149,4 +149,15 @@ uint32_t hs_mic_blocks(void);
 
 void hs_mic_service(void);
 
+/****************************************************************************
+ * Name: hs_mic_dump
+ *
+ * Description:
+ *   Print the codec and DMA channel state, for diagnosing a capture that
+ *   never produces a block.
+ *
+ ****************************************************************************/
+
+void hs_mic_dump(void);
+
 #endif /* __APP_HUANGSHAN_HAL_HS_MIC_H */

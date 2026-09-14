@@ -66,7 +66,8 @@
 #define MA_PAGE_GSR        2
 #define MA_PAGE_PPG        3
 #define MA_PAGE_IMU        4
-#define MA_PAGE_COUNT      5
+#define MA_PAGE_MIC        5
+#define MA_PAGE_COUNT      6
 
 #define MA_REFRESH_MS      500
 
@@ -96,9 +97,34 @@
 
 #define MA_COLOR_BG        0x101418
 #define MA_COLOR_CARD      0x1c2530
+#define MA_COLOR_TRACK     0x2a3745
 #define MA_COLOR_TEXT      0xe8eef5
 #define MA_COLOR_MUTED     0x8fa3b8
 #define MA_COLOR_ACCENT    0x31c48d
+
+/* One palette for anything that reads as a level, so the battery and the
+ * microphone meter stay visually consistent.
+ *
+ *   charging / loud    blue / red
+ *   healthy / normal   green
+ *   getting low        yellow
+ *   nearly empty       red
+ */
+
+#define MA_COLOR_CHARGE    0x4da3ff
+#define MA_COLOR_LEVEL_OK  0x3ddc84
+#define MA_COLOR_LEVEL_LOW 0xffc14d
+#define MA_COLOR_LEVEL_CRIT 0xff5c5c
+
+/* Battery thresholds, in percent. */
+
+#define MA_BATT_LOW_PCT    60
+#define MA_BATT_CRIT_PCT   20
+
+/* Microphone meter thresholds, on the relative 0..100 scale. */
+
+#define MA_MIC_HOT_PCT     60
+#define MA_MIC_CLIP_PCT    85
 
 /****************************************************************************
  * Private Data
@@ -122,13 +148,15 @@ static lv_obj_t *g_lbl_batt_mv;
 static lv_obj_t *g_lbl_batt_note;
 static lv_obj_t *g_lbl_sensors;
 
-/* Microphone loudness.  The bar carries a relative 0..100 figure: bias,
- * sensitivity and gain vary between units, so the number is only meaningful
- * against its own recent history, not as a sound pressure level.
+/* Microphone page.  The meter is an arc rather than a bar: at this size a
+ * gauge reads much more like a level indicator, and the 270 degree sweep
+ * leaves room for the number in the middle.
  */
 
-static lv_obj_t *g_mic_bar;
-static lv_obj_t *g_lbl_mic;
+static lv_obj_t *g_mic_arc;
+static lv_obj_t *g_lbl_mic_big;
+static lv_obj_t *g_mic_peak_bar;
+static lv_obj_t *g_lbl_mic_peak;
 static volatile bool g_mic_ok;
 
 /* Latest battery reading in millivolts.  The UI timer owns the ADC and
@@ -171,6 +199,18 @@ static bool g_max_open;
 static bool g_batt_open;
 static bool g_vib_open;
 static bool g_btn_open;
+
+/* Latest IMU sample.  hs_imu_read() blocks inside the driver until the sensor
+ * has data, which is far too long to run from the render thread's timer: it
+ * is what made the MOTION page stutter as it was swiped into view.  A thread
+ * owns the sensor and publishes the sample here instead, and the BLE data
+ * thread reads the same copy rather than racing on the file descriptor.
+ */
+
+static struct hs_imu_sample_s g_imu_sample;
+static volatile bool          g_imu_valid;
+static pthread_mutex_t        g_imu_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_t              g_imu_thread;
 
 /* PPG pipeline.  The MAX30102 produces 100 samples per second and needs to
  * be drained at that rate for the beat detector to see the pulse waveform,
@@ -385,29 +425,6 @@ static void ma_build_system_page(lv_obj_t *tile)
   lv_obj_set_width(g_lbl_sensors, LV_PCT(100));
   lv_obj_align(g_lbl_sensors, LV_ALIGN_TOP_LEFT, 0, 26);
   lv_label_set_text(g_lbl_sensors, "probing...");
-
-  /* Loudness row, pinned to the bottom of the same card.  Anchoring rather
-   * than using a fixed offset keeps the layout independent of the panel
-   * height, which the rest of the page already relies on.
-   */
-
-  g_mic_bar = lv_bar_create(card);
-  lv_obj_set_size(g_mic_bar, LV_PCT(66), 12);
-  lv_obj_align(g_mic_bar, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-  lv_bar_set_range(g_mic_bar, 0, 100);
-  lv_bar_set_value(g_mic_bar, 0, LV_ANIM_OFF);
-  lv_obj_set_style_radius(g_mic_bar, 6, 0);
-  lv_obj_set_style_bg_color(g_mic_bar, lv_color_hex(MA_COLOR_MUTED), 0);
-  lv_obj_set_style_bg_opa(g_mic_bar, LV_OPA_30, 0);
-  lv_obj_set_style_bg_color(g_mic_bar, lv_color_hex(MA_COLOR_ACCENT),
-                            LV_PART_INDICATOR);
-  lv_obj_set_style_bg_opa(g_mic_bar, LV_OPA_COVER, LV_PART_INDICATOR);
-
-  g_lbl_mic = lv_label_create(card);
-  lv_obj_set_style_text_color(g_lbl_mic, lv_color_hex(MA_COLOR_MUTED), 0);
-  lv_obj_set_style_text_font(g_lbl_mic, &lv_font_montserrat_16, 0);
-  lv_obj_align(g_lbl_mic, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
-  lv_label_set_text(g_lbl_mic, "MIC");
 }
 
 /****************************************************************************
@@ -556,6 +573,100 @@ static void ma_build_motion_page(lv_obj_t *tile)
   ma_create_caption(card, "Temperature");
   g_lbl_temp = ma_create_value(card, "-- C", &lv_font_montserrat_24,
                                MA_COLOR_TEXT);
+}
+
+/****************************************************************************
+ * Name: ma_mic_color
+ *
+ * Description:
+ *   Colour of the microphone meter for a relative level.  Green through the
+ *   normal range, amber once the room is loud, red on the way to clipping -
+ *   the same three steps the battery uses, so the screen stays coherent.
+ *
+ ****************************************************************************/
+
+static uint32_t ma_mic_color(int level)
+{
+  if (level >= MA_MIC_CLIP_PCT)
+    {
+      return MA_COLOR_LEVEL_CRIT;
+    }
+
+  if (level >= MA_MIC_HOT_PCT)
+    {
+      return MA_COLOR_LEVEL_LOW;
+    }
+
+  return MA_COLOR_ACCENT;
+}
+
+/****************************************************************************
+ * Name: ma_build_mic_page
+ *
+ * Description:
+ *   Loudness page.  An arc gauge rather than a bar: the 270 degree sweep
+ *   reads like a level meter and leaves the middle free for the number.
+ *
+ ****************************************************************************/
+
+static void ma_build_mic_page(lv_obj_t *tile)
+{
+  lv_obj_t *card;
+
+  ma_create_page_header(tile, "SOUND");
+
+  card = ma_create_card(tile, 224);
+  lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 44);
+
+  g_mic_arc = lv_arc_create(card);
+  lv_obj_set_size(g_mic_arc, 160, 160);
+  lv_obj_align(g_mic_arc, LV_ALIGN_TOP_MID, 0, 4);
+  lv_arc_set_range(g_mic_arc, 0, 100);
+  lv_arc_set_value(g_mic_arc, 0);
+  lv_arc_set_bg_angles(g_mic_arc, 135, 45);
+  lv_obj_set_style_arc_width(g_mic_arc, 14, LV_PART_MAIN);
+  lv_obj_set_style_arc_width(g_mic_arc, 14, LV_PART_INDICATOR);
+  lv_obj_set_style_arc_color(g_mic_arc, lv_color_hex(MA_COLOR_TRACK),
+                             LV_PART_MAIN);
+  lv_obj_set_style_arc_color(g_mic_arc, lv_color_hex(MA_COLOR_ACCENT),
+                             LV_PART_INDICATOR);
+
+  /* No knob: this is an indicator, not a control.  Clearing the part's
+   * styles is how LVGL hides it, since the arc only draws what it has a
+   * style for.
+   */
+
+  lv_obj_remove_style(g_mic_arc, NULL, LV_PART_KNOB);
+  lv_obj_clear_flag(g_mic_arc, LV_OBJ_FLAG_CLICKABLE);
+
+  g_lbl_mic_big = lv_label_create(card);
+  lv_label_set_text(g_lbl_mic_big, "--");
+  lv_obj_set_style_text_color(g_lbl_mic_big, lv_color_hex(MA_COLOR_TEXT), 0);
+  lv_obj_set_style_text_font(g_lbl_mic_big, &lv_font_montserrat_48, 0);
+  lv_obj_align(g_lbl_mic_big, LV_ALIGN_TOP_MID, 0, 52);
+
+  card = ma_create_card(tile, 96);
+  lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 280);
+  ma_create_caption(card, "Peak hold");
+
+  g_lbl_mic_peak = lv_label_create(card);
+  lv_label_set_text(g_lbl_mic_peak, "--");
+  lv_obj_set_style_text_color(g_lbl_mic_peak, lv_color_hex(MA_COLOR_MUTED),
+                              0);
+  lv_obj_set_style_text_font(g_lbl_mic_peak, &lv_font_montserrat_16, 0);
+  lv_obj_align(g_lbl_mic_peak, LV_ALIGN_TOP_RIGHT, 0, 0);
+
+  g_mic_peak_bar = lv_bar_create(card);
+  lv_obj_set_size(g_mic_peak_bar, LV_PCT(100), 14);
+  lv_obj_align(g_mic_peak_bar, LV_ALIGN_TOP_MID, 0, 30);
+  lv_bar_set_range(g_mic_peak_bar, 0, 100);
+  lv_bar_set_value(g_mic_peak_bar, 0, LV_ANIM_OFF);
+  lv_obj_set_style_radius(g_mic_peak_bar, 7, 0);
+  lv_obj_set_style_bg_color(g_mic_peak_bar, lv_color_hex(MA_COLOR_TRACK), 0);
+  lv_obj_set_style_bg_opa(g_mic_peak_bar, LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_color(g_mic_peak_bar, lv_color_hex(MA_COLOR_MUTED),
+                            LV_PART_INDICATOR);
+  lv_obj_set_style_bg_opa(g_mic_peak_bar, LV_OPA_COVER, LV_PART_INDICATOR);
 }
 
 /****************************************************************************
@@ -989,41 +1100,168 @@ static void ma_mic_start(void)
 }
 
 /****************************************************************************
+ * Name: ma_imu_thread
+ *
+ * Description:
+ *   Own the IMU and publish its latest sample.
+ *
+ *   hs_imu_read() blocks inside the sensor driver until a conversion is
+ *   ready.  Running that from the LVGL timer stalled the swipe animation
+ *   whenever the MOTION page came into view, and it also contended with the
+ *   BLE data thread on the same file descriptor.  One thread now feeds both.
+ *
+ ****************************************************************************/
+
+static FAR void *ma_imu_thread(FAR void *arg)
+{
+  struct hs_imu_sample_s sample;
+
+  (void)arg;
+
+  if (hs_imu_open(&g_imu) < 0)
+    {
+      return NULL;
+    }
+
+  g_imu_open = true;
+
+  while (g_sys_run)
+    {
+      if (hs_imu_read(&g_imu, &sample) == 0)
+        {
+          pthread_mutex_lock(&g_imu_lock);
+          g_imu_sample = sample;
+          g_imu_valid  = true;
+          pthread_mutex_unlock(&g_imu_lock);
+        }
+
+      usleep(100000);
+    }
+
+  hs_imu_close(&g_imu);
+  g_imu_open = false;
+  return NULL;
+}
+
+/****************************************************************************
+ * Name: ma_imu_start
+ ****************************************************************************/
+
+static void ma_imu_start(void)
+{
+  pthread_attr_t attr;
+
+  if (pthread_attr_init(&attr) != 0)
+    {
+      return;
+    }
+
+  pthread_attr_setstacksize(&attr, 3072);
+
+  if (pthread_create(&g_imu_thread, &attr, ma_imu_thread, NULL) == 0)
+    {
+      pthread_detach(g_imu_thread);
+    }
+
+  pthread_attr_destroy(&attr);
+}
+
+/****************************************************************************
  * Name: ma_mic_timer
  *
  * Description:
- *   Refresh the loudness bar.  Only touched when the rounded figure actually
- *   changes, so a steady room costs no redraws at all.
+ *   Refresh the loudness meter.  Redrawn only when the reading moves by two
+ *   or more, so a steady room costs no redraws at all - the arc is large and
+ *   repainting it ten times a second for no visible change is waste the
+ *   panel cannot afford.
  *
  ****************************************************************************/
 
 static void ma_mic_timer(lv_timer_t *timer)
 {
-  static int last = -1;
+  static int last_level = -1;
+  static int last_peak  = -1;
+  static int peak;
   int level;
 
   (void)timer;
 
   if (!g_mic_ok)
     {
-      if (last != -2)
+      if (last_level != -2)
         {
-          last = -2;
-          lv_label_set_text(g_lbl_mic, "MIC n/a");
+          last_level = last_peak = -2;
+          lv_label_set_text(g_lbl_mic_big, "n/a");
+          lv_label_set_text(g_lbl_mic_peak, "--");
+          lv_arc_set_value(g_mic_arc, 0);
+          lv_bar_set_value(g_mic_peak_bar, 0, LV_ANIM_OFF);
         }
 
       return;
     }
 
   level = hs_mic_level();
-  if (level == last)
+
+  /* Peak hold: follow upwards immediately, then fall back one step per tick
+   * so that a short sound stays readable for a second or two.
+   */
+
+  if (level >= peak)
+    {
+      peak = level;
+    }
+  else if (peak > 0)
+    {
+      peak--;
+    }
+
+  if (last_level >= 0 && level > last_level - 2 && level < last_level + 2 &&
+      peak == last_peak)
     {
       return;
     }
 
-  last = level;
-  lv_bar_set_value(g_mic_bar, level, LV_ANIM_OFF);
-  lv_label_set_text_fmt(g_lbl_mic, "MIC %d", level);
+  last_level = level;
+  last_peak  = peak;
+
+  lv_arc_set_value(g_mic_arc, level);
+  lv_obj_set_style_arc_color(g_mic_arc, lv_color_hex(ma_mic_color(level)),
+                             LV_PART_INDICATOR);
+  lv_label_set_text_fmt(g_lbl_mic_big, "%d", level);
+
+  lv_bar_set_value(g_mic_peak_bar, peak, LV_ANIM_OFF);
+  lv_label_set_text_fmt(g_lbl_mic_peak, "peak %d", peak);
+}
+
+/****************************************************************************
+ * Name: ma_battery_color
+ *
+ * Description:
+ *   Colour for the battery readout.  Blue while the charger is attached, so
+ *   it cannot be mistaken for a healthy green; otherwise green, amber and
+ *   red as the pack empties.  A negative percentage means the reading is not
+ *   known yet, which reads as red rather than as "empty".
+ *
+ ****************************************************************************/
+
+static uint32_t ma_battery_color(bool charging, int32_t pct)
+{
+  if (charging)
+    {
+      return MA_COLOR_CHARGE;
+    }
+
+  if (pct >= MA_BATT_LOW_PCT)
+    {
+      return MA_COLOR_LEVEL_OK;
+    }
+
+  if (pct >= MA_BATT_CRIT_PCT)
+    {
+      return MA_COLOR_LEVEL_LOW;
+    }
+
+  return MA_COLOR_LEVEL_CRIT;
 }
 
 /****************************************************************************
@@ -1047,6 +1285,8 @@ static void ma_read_system(void)
 
   if (mv != last_batt || charging != last_charging)
     {
+      int32_t pct = -1;
+
       last_batt     = mv;
       last_charging = charging;
 
@@ -1056,7 +1296,7 @@ static void ma_read_system(void)
            * drops far below 3.3 V under this load.
            */
 
-          int32_t pct = (mv - 3300) * 100 / 900;
+          pct = (mv - 3300) * 100 / 900;
 
           if (pct < 0)   { pct = 0; }
           if (pct > 100) { pct = 100; }
@@ -1073,15 +1313,15 @@ static void ma_read_system(void)
       if (charging)
         {
           lv_label_set_text(g_lbl_batt_note, "charging");
-          lv_obj_set_style_text_color(g_lbl_batt_mv,
-                                      lv_color_hex(0xffc14d), 0);
         }
       else
         {
           lv_label_set_text(g_lbl_batt_note, "on battery");
-          lv_obj_set_style_text_color(g_lbl_batt_mv,
-                                      lv_color_hex(MA_COLOR_ACCENT), 0);
         }
+
+      lv_obj_set_style_text_color(g_lbl_batt_mv,
+                                  lv_color_hex(ma_battery_color(charging,
+                                                                pct)), 0);
     }
 
   /* Two sources of truth: whether the node exists, and whether the sampling
@@ -1369,32 +1609,23 @@ static void ma_read_vitals(void)
 
 static void ma_read_motion(void)
 {
-  static uint32_t imu_tick;
   struct hs_imu_sample_s sample;
+  bool valid;
 
   if (!g_imu_open)
     {
-      if (hs_imu_open(&g_imu) < 0)
-        {
-          lv_label_set_text(g_lbl_accel, "no IMU");
-          return;
-        }
-
-      g_imu_open = true;
-    }
-
-  if (hs_imu_read(&g_imu, &sample) < 0)
-    {
-      lv_label_set_text(g_lbl_accel, "read error");
+      lv_label_set_text(g_lbl_accel, "no IMU");
       return;
     }
 
-  /* The raw IMU values change on every sample, so redrawing them at the full
-   * refresh rate is pure waste.  Show every other sample (about 1 Hz) which
-   * is more than enough for a motion readout.
-   */
+  /* The IMU thread publishes the sample; nothing here blocks. */
 
-  if ((imu_tick++ & 1u) != 0)
+  pthread_mutex_lock(&g_imu_lock);
+  sample = g_imu_sample;
+  valid  = g_imu_valid;
+  pthread_mutex_unlock(&g_imu_lock);
+
+  if (!valid)
     {
       return;
     }
@@ -1624,24 +1855,19 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
           sflags |= HS_BLE_STATUS_HR_VALID | HS_BLE_STATUS_SPO2_VALID;
         }
 
-      /* Motion: read the IMU on demand (the sensor is also used by the
-       * MOTION page, so failures are simply reported as invalid).
+      /* Motion: the IMU thread owns the sensor, so read the published sample
+       * rather than issuing a blocking read on the same descriptor.
        */
 
-      if (g_imu_open || hs_imu_open(&g_imu) >= 0)
+      pthread_mutex_lock(&g_imu_lock);
+      if (g_imu_valid)
         {
-          struct hs_imu_sample_s sample;
-
-          g_imu_open = true;
-
-          if (hs_imu_read(&g_imu, &sample) >= 0)
-            {
-              accel[0] = sample.accel_x_mg;
-              accel[1] = sample.accel_y_mg;
-              accel[2] = sample.accel_z_mg;
-              sflags  |= HS_BLE_STATUS_IMU_VALID;
-            }
+          accel[0] = g_imu_sample.accel_x_mg;
+          accel[1] = g_imu_sample.accel_y_mg;
+          accel[2] = g_imu_sample.accel_z_mg;
+          sflags  |= HS_BLE_STATUS_IMU_VALID;
         }
+      pthread_mutex_unlock(&g_imu_lock);
 
       /* Battery: the UI timer owns the ADC and publishes the reading in
        * g_vbat_mv, so this thread only has to map it to a percentage.  It
@@ -1935,6 +2161,7 @@ int main(int argc, FAR char *argv[])
   ma_build_mood_page(g_tiles[MA_PAGE_GSR]);
   ma_build_vitals_page(g_tiles[MA_PAGE_PPG]);
   ma_build_motion_page(g_tiles[MA_PAGE_IMU]);
+  ma_build_mic_page(g_tiles[MA_PAGE_MIC]);
   ma_build_nav(screen);
 
   lv_timer_create(ma_refresh_timer, MA_REFRESH_MS, NULL);
@@ -1949,6 +2176,7 @@ int main(int argc, FAR char *argv[])
   ma_ppg_start();
   ma_sys_start();
   ma_mic_start();
+  ma_imu_start();
 
   /* Bluetooth stays off until the LINK page switch is touched.  Bringing the
    * host stack up costs a burst of synchronous HCI traffic, and starting it
