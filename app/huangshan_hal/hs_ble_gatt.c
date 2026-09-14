@@ -733,11 +733,6 @@ static const struct bt_gatt_attr_s g_attrs[] =
                      hs_ble_read_status, NULL, NULL),
   BT_GATT_CCC(HS_H_STATUS_CCC, HS_H_STATUS_VAL, g_ccc_status,
               hs_ble_ccc_cfg_changed),
-  BT_GATT_CHARACTERISTIC(HS_H_STATUS_CHRC, &g_chrc_status),
-  BT_GATT_DESCRIPTOR(HS_H_STATUS_VAL, &g_uuid_status, BT_GATT_PERM_READ,
-                     hs_ble_read_status, NULL, NULL),
-  BT_GATT_CCC(HS_H_STATUS_CCC, HS_H_STATUS_VAL, g_ccc_status,
-              hs_ble_ccc_cfg_changed),
 
   /* Device Information Service */
 
