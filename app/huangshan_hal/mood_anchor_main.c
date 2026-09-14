@@ -2785,7 +2785,11 @@ static void ma_ble_start_async(void)
       return;
     }
 
-  pthread_attr_setstacksize(&attr, 8192);
+  /* HCI bring-up enters the vendor IPC transport and synchronous command
+   * completion path.  Keep ample headroom for nested calls and avoid a hard
+   * fault in this worker while the UI task continues to run.
+   */
+  pthread_attr_setstacksize(&attr, 16384);
 
   /* The BLE host bring-up contains synchronous commands with a 2.5 s
    * timeout.  At the same priority as the LVGL render loop the worker gets

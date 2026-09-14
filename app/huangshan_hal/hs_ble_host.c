@@ -88,16 +88,11 @@ int hs_ble_host_start(void)
 
   for (attempt = 0; attempt < 3; attempt++)
     {
-      hs_ble_stage("bt_netdev_register #%d", attempt + 1);
-
       ret = bt_netdev_register(drv);
       if (ret >= 0)
         {
-          hs_ble_stage("host up (try %d)", attempt + 1);
           break;
         }
-
-      hs_ble_stage("register fail %d try %d", ret, attempt + 1);
 
       wlerr("ERROR: bt_netdev_register failed: %d (attempt %d)\n",
             ret, attempt + 1);
