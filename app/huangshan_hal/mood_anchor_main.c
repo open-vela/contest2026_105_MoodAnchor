@@ -118,6 +118,7 @@ static lv_obj_t *g_lbl_gsr_band;
 /* System page (battery + sensor inventory) */
 
 static lv_obj_t *g_lbl_batt_mv;
+static lv_obj_t *g_lbl_batt_note;
 static lv_obj_t *g_lbl_sensors;
 
 /* Latest battery reading in millivolts.  The UI timer owns the ADC and
@@ -347,6 +348,19 @@ static void ma_build_system_page(lv_obj_t *tile)
   card = ma_create_card(tile, 120);
   lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 44);
   ma_create_caption(card, "Battery");
+
+  /* Charging state lives in the corner so the voltage and percentage can be
+   * shown in both cases: while charging the pack terminal voltage climbs
+   * from about 3.7 V to 4.2 V, which is exactly the progress indication.
+   */
+
+  g_lbl_batt_note = lv_label_create(card);
+  lv_obj_set_style_text_color(g_lbl_batt_note, lv_color_hex(MA_COLOR_MUTED),
+                              0);
+  lv_obj_set_style_text_font(g_lbl_batt_note, &lv_font_montserrat_16, 0);
+  lv_obj_align(g_lbl_batt_note, LV_ALIGN_TOP_RIGHT, 0, 0);
+  lv_label_set_text(g_lbl_batt_note, "");
+
   g_lbl_batt_mv = ma_create_value(card, "--", &lv_font_montserrat_48,
                                   MA_COLOR_ACCENT);
 
@@ -889,52 +903,55 @@ static void ma_sys_start(void)
 
 static void ma_read_system(void)
 {
-  static int     last_mode      = -1;
-  static int32_t last_batt      = -1;
+  static int     last_charging = -1;
+  static int32_t last_batt     = -1;
   static char    last_list[256] = "";
   char           buf[256];
   int32_t        mv = g_vbat_mv;
   bool           usb = ma_usb_present();
-  int            mode;
+  int            charging = usb ? 1 : 0;
 
-  /* While the charger is attached the VBATS node is clamped, so the only
-   * honest thing to show is the charging state.  A voltage is displayed
-   * exclusively when the pack is the sole supply.
+  /* The pack voltage is shown whether or not the charger is attached: the
+   * VBATS sense input follows the battery itself, and while charging the
+   * terminal voltage rising towards 4.2 V is the progress indication.
    */
 
-  mode = usb ? 1 : (mv > 0 ? 2 : 0);
-
-  if (mode != last_mode || (mode == 2 && mv != last_batt))
+  if (mv != last_batt || charging != last_charging)
     {
-      last_mode = mode;
-      last_batt = mv;
+      last_batt     = mv;
+      last_charging = charging;
 
-      switch (mode)
+      if (mv > 0)
         {
-          case 1:
-            lv_label_set_text(g_lbl_batt_mv, "CHARGING");
-            break;
+          /* 3.3 V .. 4.2 V mapped to 0..100 %: a single cell that never
+           * drops far below 3.3 V under this load.
+           */
 
-          case 2:
-            {
-              /* 3.3 V .. 4.2 V mapped to 0..100 %: a single cell that never
-               * drops far below 3.3 V under this load.
-               */
+          int32_t pct = (mv - 3300) * 100 / 900;
 
-              int32_t pct = (mv - 3300) * 100 / 900;
+          if (pct < 0)   { pct = 0; }
+          if (pct > 100) { pct = 100; }
 
-              if (pct < 0)   { pct = 0; }
-              if (pct > 100) { pct = 100; }
+          lv_label_set_text_fmt(g_lbl_batt_mv, "%d%%(%d.%01dV)",
+                                (int)pct, (int)(mv / 1000),
+                                (int)((mv % 1000) / 100));
+        }
+      else
+        {
+          lv_label_set_text(g_lbl_batt_mv, "--");
+        }
 
-              lv_label_set_text_fmt(g_lbl_batt_mv, "%d%%(%d.%01dV)",
-                                    (int)pct, (int)(mv / 1000),
-                                    (int)((mv % 1000) / 100));
-            }
-            break;
-
-          default:
-            lv_label_set_text(g_lbl_batt_mv, "--");
-            break;
+      if (charging)
+        {
+          lv_label_set_text(g_lbl_batt_note, "charging");
+          lv_obj_set_style_text_color(g_lbl_batt_mv,
+                                      lv_color_hex(0xffc14d), 0);
+        }
+      else
+        {
+          lv_label_set_text(g_lbl_batt_note, "on battery");
+          lv_obj_set_style_text_color(g_lbl_batt_mv,
+                                      lv_color_hex(MA_COLOR_ACCENT), 0);
         }
     }
 
