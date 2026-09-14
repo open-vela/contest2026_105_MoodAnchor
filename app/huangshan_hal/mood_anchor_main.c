@@ -1222,16 +1222,19 @@ int main(int argc, FAR char *argv[])
   (void)argc;
   (void)argv;
 
-  /* LVGL logs go straight to the 1 Mbps console from inside the render
-   * thread; silence them, the application prints its own state changes.
-   */
-
-  lv_log_register_print_cb(ma_log_silent);
-
   lv_init();
 
   lv_nuttx_dsc_init(&info);
   lv_nuttx_init(&info, &result);
+
+  /* The NuttX port installs its own syslog callback from inside
+   * lv_nuttx_init(), so the channel can only be silenced after that call.
+   * LVGL logs from the render thread straight to the 1 Mbps console and
+   * every line costs roughly a millisecond there; the application prints its
+   * own state changes instead.
+   */
+
+  lv_log_register_print_cb(ma_log_silent);
 
   if (result.disp == NULL)
     {
