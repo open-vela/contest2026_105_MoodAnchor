@@ -19,6 +19,27 @@ NUM_COMPLETED_PACKETS` 三类事件，`bt_enqueue_bufwork(&g_hp_rxlist, buf)`
 **安全性**：等待者在应用线程（`bt_initialize` 由应用调用），post 在 RX
 pthread，跨线程唤醒无死锁。实测 host 栈初始化、广播、3 分钟稳定运行均正常。
 
+### 2. `nuttx/drivers/wireless/bluetooth/bt_uart.c` — RX 回调同步化（官方传输层补丁）
+
+搜索注释 `Process the packet synchronously in the callback context`。
+
+- `btuart_rxcallback()`：官方实现 `work_queue(HPWORK, ...)`；本平台改
+  **同步调用 `btuart_rxwork(arg)`**（shim 读是非阻塞的，回调运行在 vendor
+  rx_worker 的 HPWORK 线程上，不会卡死）。
+- `btuart_read()` / `btuart_rxwork()`：非阻塞读返回 0（无数据）是正常现象，
+  官方代码把它当错误打印 `Returned error 0` / `btuart_read failed`，
+  已改为静默返回；分包到达的 `Incomplete packet` 警告降级为 wlinfo。
+- 对应删除了未使用的 `upper` 局部变量。
+
+### 3. `vendor/sifli/boards/.../configs/nsh/defconfig` — 官方 UART 传输层开关
+
+```
+CONFIG_UART_BTH4=y
+CONFIG_BLUETOOTH_UART=y
+CONFIG_BLUETOOTH_UART_SHIM=y
+CONFIG_BLUETOOTH_UART_OTHER=y
+```
+
 ## 可选改动
 
 ### 2. `vendor/sifli/boards/sf32lb52/lckfb_huangshan_pi/configs/nsh/defconfig`
