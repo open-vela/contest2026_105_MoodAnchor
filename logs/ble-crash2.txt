@@ -1,0 +1,58 @@
+
+=== [00:05:10] port opened ===
+[00:05:10] SFBL
+[00:05:12] AB[00:05:12] CD[0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc0 init done, ret=0
+[0m[00:05:13] [0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc1 init[00:05:13] [0mINFO: LSM6DS3 test device registered as /dev/lsm6dsl0, INT=31
+[0m[0m[33mWARN: skip HAL_FLASH_Init during XIP bringup, NOR write/erase disabled
+[0m[0mINFO: [00:05:15] mood_anchor [8:100]
+
+NuttShell (NSH)
+nsh> [K[0m[31;1m[LVGL] [User]	(2.710, +2710)	 check_stack_size: tid: 8, Stack size : 40856 lv_nuttx_entry.c:283
+[0m[0m[31;1m[LVGL] [User]	(2.712, +2)	 lv_nuttx_lcd_create: lcd /dev/lcd0 opening lv_nuttx_lcd.c:77
+[0m[0m[31;1m[LVGL] [User]	(2.715, +3)	 lv_nuttx_lcd_create: lcd /dev/lcd0 open success lv_nuttx_lcd.c:84
+[0m[0m[31;1m[LVGL] [User]	(2.728, +13)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 opening lv_nuttx_touchscreen.c:79
+;1m[LVGL] [User]	(2.731, +3)	 lv_nuttx_touchscreen_create: touch[00:05:15] [ui] 1
+MoodAnchor UI running (swipe for VITALS / MOTION / LINK)
+[00:05:16] mood: microphone started
+[00:05:18] [ui] 5
+[00:05:20] [ui] 9
+[00:05:22] [ui] 13
+[00:05:24] [ui] 17
+[00:05:26] [ui] 21
+[00:05:28] [ui] 25
+[00:05:29] mood: agitation marked a false alarm (0/1)
+[00:05:30] [ui] 29
+[00:05:32] [ui] 33
+[00:05:34] [ui] 37
+[00:05:37] [ui] 41
+[00:05:38] sf32lb52 bt: LCPU up in 0 ms
+dump_assert_info: Current Version: NuttX  0.0.0 5f713dc903a-dirty Sep 14 2026 23:23:18 arm
+dump_assert_info: Assertion failed : chor process: mood_anchor 0x12074405
+up_dump_register: R0: 200042: 20004924  R3: 00000000
+up_dump_register: R4: 20015a18 R5: 000er: R8: 20004914 R9: 00000001 R10: 00000006 R11: 0000007f
+up_dumSR: 2000000b BASEPRI: 00000000 CONTROL: 00000000
+up_dump_registe[00:05:39] sched_dumpstack: backtrace| 8: 0x12027e44 0x12014cc6 0x12015386 0x12013c52 0x12013584 0x12013d1a 0x1205246c 0x12052128
+sched_dumck: backtrace| 8: 0x12065c1e 0x1207372c 0x12088fc4 0x120826e6 0xa98 0x1207526c 0x1204c690
+sched_dumpstack: backtrace| 8: 0x120168f0
+sched_dumpstack: backtrace| 8: 0x12027e44 0x12014cc6 0x12013da2 0x12013d10 0x1205246c 0x12052128 0x12065c1e 0x1207372c
+scheddump_assert_info: Current Version: NuttX  0.0.0 5f713dc903a-dirty Sep 14 2026 23:23:18 arm
+dump_assert_info: Assertion failed panic: at file: ../../nuttx/arch/arm/src/arm_m/arm_hardfault.c:186004d10 R1: 000000ba R2: 20004924  R3: 00000001
+up_dump_register: 120b004e  R7: 60009990
+up_dump_register: R8: 20004914 R9: 00000ump_register: R12: 00000000 SP: 60009798 LR: 12015245  PC: 12015mp_register: EXC_RETURN: 2001acc0
+sched_dumpstack: backtrace| 8: 0x12027e44 0x12014cc6 0x12015386 0x12013aae 0x12013584 0x120174fa 0x120188fc 0x12018ba4
+sched_d15a 0x12016942 0x12013da8 0x12013d10 0x1205246c 0x12052128 0x120sched_dumpstack: backtrace| 8: 0x1207372c 0x12088fc4 0x120826e6 0x120a4482 0x120a1a98 0x1207526c 0x1204c690 0x120168f0
+dump_tasks:    PID GROUP PRI POLICY   TYPE    NPX STATE   EVENT      SIGMASK          STACKBASE  STACKSIZE   COMMAND
+dump_task:       0     0   0 FIFO     Kthread -   Ready              0000000000000000 0x2001453c      1968   CPU0 IDead -   Waiting Signal     0000000000000000 0x200059b0     159689890     15968   lpwork 0x20000540 0x20000588
+dump_task:      1960066030      8088   BT_HCI_Tx
+dump_task:       5     5 100 RR  emaphore  0000000000000000 0x2001f390     15992   nsh_main
+dump_       Task    -   Running            0000000000000000 0x60000078     40856   mood_anchor
+dump_task:       9     8 100 RR       pthread P   Waiting Semaphore  0000000000000000 0x2007d290      4016   mood_anchor 0x12073e21 0
+dump_task:      10     8 100 RR d -   Waiting Signal     0000000000000000 0x2007e388      2992      2992   mood_anchor 0x12074179 0
+dump_task:      12     8 100000 0x6005fb88      2992   mood_anchor 0x120741c9 0
+dump_task:  d -   Waiting Signal     0000000000000000 0x60060790      2992  0000
+
+=== [00:05:45] NO OUTPUT for 6 s ===

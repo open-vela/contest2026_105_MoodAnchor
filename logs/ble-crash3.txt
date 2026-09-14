@@ -1,0 +1,9 @@
+
+=== [00:15:26] port opened ===
+[00:15:27] SFBL
+[00:15:29] AB[00:15:29] CD[0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc0 init done, ret=0
+[0m[00:15:29] [0m[33mADC calibration data missing, use defaults
+[0m[0mAD[00:15:29] C calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc1 init

@@ -1028,16 +1028,18 @@ static void ma_refresh_ble_ui(void)
   if (g_lbl_ble_stage != NULL)
     {
       static char last_stage[80] = "";
-      struct mallinfo mi = mallinfo();
-      char buf[80];
 
-      snprintf(buf, sizeof(buf), "%s\nheap %d KB", hs_ble_stage_last(),
-               mi.fordblks / 1024);
+      /* No mallinfo() here.  It walks the whole heap free list under the heap
+       * mutex and asserts (mm_foreach.c) when that does not go perfectly,
+       * which took the whole system down every time a phone-less watch idled
+       * on the LINK page.  A diagnostic must not be able to halt the device.
+       */
 
-      if (strcmp(buf, last_stage) != 0)
+      if (strcmp(hs_ble_stage_last(), last_stage) != 0)
         {
-          memcpy(last_stage, buf, sizeof(last_stage));
-          lv_label_set_text(g_lbl_ble_stage, buf);
+          snprintf(last_stage, sizeof(last_stage), "%s",
+                   hs_ble_stage_last());
+          lv_label_set_text(g_lbl_ble_stage, last_stage);
         }
     }
 
@@ -2627,21 +2629,11 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
 
       if ((g_hb_seq++ & 1u) == 0)
         {
-          /* The heap figure is here because the host stack allocates a
-           * 16 KB stack for its ACL transmit thread the moment a phone
-           * connects (kthread_create in bt_conn_set_state).  If the heap is
-           * too tight for that it does not fail gracefully, so the trend
-           * before the connection matters.
-           */
-
-          struct mallinfo mi = mallinfo();
-
-          printf("[hb] sys=%lu imu=%lu gsr=%lu ble=%d peer=%d mood=%d/%d"
-                 " heap=%d\n",
+          printf("[hb] sys=%lu imu=%lu gsr=%lu ble=%d peer=%d mood=%d/%d\n",
                  (unsigned long)g_tick_sys, (unsigned long)g_tick_imu,
                  (unsigned long)g_tick_gsr, g_ble_state,
                  (int)hs_ble_gatt_peer_connected(), (int)result.agitated,
-                 result.confidence, mi.fordblks);
+                 result.confidence);
         }
 
       /* Buttons and the vibration motor are no longer part of the payload,
@@ -2773,9 +2765,7 @@ static void ma_ble_start_async(void)
 
   if (g_lbl_ble_stage != NULL)
     {
-      lv_label_set_text_fmt(g_lbl_ble_stage, "%s\nheap %d KB",
-                            hs_ble_stage_last(),
-                            (int)(mallinfo().fordblks / 1024));
+      lv_label_set_text(g_lbl_ble_stage, hs_ble_stage_last());
       lv_refr_now(NULL);
     }
 
