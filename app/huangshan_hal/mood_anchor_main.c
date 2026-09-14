@@ -180,6 +180,18 @@ static volatile int     g_ppg_spo2;
 static volatile int     g_ppg_quality;
 static pthread_t        g_ppg_thread;
 
+/* Battery sampling worker -------------------------------------------------
+ *
+ * hs_adc_read() averages 20 conversions with a 10 ms gap between them, so a
+ * single call blocks for roughly 200 ms.  That is far too long to run from
+ * the render thread's timer: it used to eat 40% of every 500 ms tick.  The
+ * work therefore lives on its own thread and publishes the result in
+ * g_vbat_mv for both the UI and the BLE side to read.
+ */
+
+static volatile bool    g_sys_run;
+static pthread_t        g_sys_thread;
+
 /* Latest samples */
 
 /* Latest GSR reading and the classification parameters.  All of these are
@@ -799,37 +811,76 @@ static bool ma_usb_present(void)
 }
 
 /****************************************************************************
- * Name: ma_update_battery
+ * Name: ma_sys_thread
  *
  * Description:
- *   Refresh g_vbat_mv.  This is the only place that touches the VBAT ADC:
- *   the BLE data thread now reads the published value instead of opening
- *   the device itself.  Both used to issue their own reset/trigger/read
- *   sequence on the same node, which disturbed each other's conversion.
+ *   Sample the battery and publish it in g_vbat_mv.
  *
- *   VBATS is the module input described as "battery voltage sense" in the
- *   board pinout; it follows the battery and is clamped by the charger while
- *   USB is attached, so the reading is only meaningful on battery power.
+ *   This is the only place that touches the VBAT ADC.  Two other paths used
+ *   to issue their own reset/trigger/read sequence on the same node - the UI
+ *   timer and the BLE data thread - which disturbed each other's single
+ *   conversion and, worse, parked a 200 ms blocking call on the render
+ *   thread.
+ *
+ *   The 2 s period is deliberate: the pack voltage moves slowly and a longer
+ *   interval keeps the 200 ms cost down to about a tenth of this thread's
+ *   time rather than something the UI could notice.
  *
  ****************************************************************************/
 
-static void ma_update_battery(void)
+static FAR void *ma_sys_thread(FAR void *arg)
 {
-  int32_t mv = 0;
+  (void)arg;
 
-  if (!g_batt_open && hs_adc_open(&g_batt, HS_ADC_DEVICE) < 0)
+  while (g_sys_run)
+    {
+      int32_t mv = 0;
+
+      if (!g_batt_open)
+        {
+          if (hs_adc_open(&g_batt, HS_ADC_DEVICE) < 0)
+            {
+              sleep(2);
+              continue;
+            }
+
+          g_batt_open = true;
+        }
+
+      if (hs_adc_read(&g_batt, HS_ADC_VBAT_CHANNEL, &mv) == 0 && mv > 0)
+        {
+          g_vbat_mv = mv;
+        }
+
+      sleep(2);
+    }
+
+  return NULL;
+}
+
+/****************************************************************************
+ * Name: ma_sys_start
+ ****************************************************************************/
+
+static void ma_sys_start(void)
+{
+  pthread_attr_t attr;
+
+  g_sys_run = true;
+
+  if (pthread_attr_init(&attr) != 0)
     {
       return;
     }
 
-  g_batt_open = true;
+  pthread_attr_setstacksize(&attr, 3072);
 
-  if (hs_adc_read(&g_batt, HS_ADC_VBAT_CHANNEL, &mv) < 0 || mv <= 0)
+  if (pthread_create(&g_sys_thread, &attr, ma_sys_thread, NULL) == 0)
     {
-      return;
+      pthread_detach(g_sys_thread);
     }
 
-  g_vbat_mv = mv;
+  pthread_attr_destroy(&attr);
 }
 
 /****************************************************************************
@@ -1224,11 +1275,6 @@ static void ma_refresh_timer(lv_timer_t *timer)
 
   (void)timer;
 
-  /* The battery is sampled unconditionally: the BLE status characteristic
-   * carries it, and that has to keep working whatever page is on screen.
-   */
-
-  ma_update_battery();
   ma_refresh_ble_ui();
 
   if (tile == NULL || tile == g_tiles[MA_PAGE_SYSTEM])
@@ -1754,6 +1800,7 @@ int main(int argc, FAR char *argv[])
    */
 
   ma_ppg_start();
+  ma_sys_start();
 
   /* Bluetooth stays off until the LINK page switch is touched.  Bringing the
    * host stack up costs a burst of synchronous HCI traffic, and starting it
