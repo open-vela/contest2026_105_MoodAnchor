@@ -62,45 +62,73 @@ bool hs_mic_ready(void)
   return sf32lb_mic_ready();
 }
 
+/* Loudness is logarithmic, so the mapping is done in octaves rather than on
+ * the raw magnitude.  A linear scale would spend most of its travel on the
+ * top few dB and leave speech squashed against the bottom of the meter.
+ *
+ * The window is 6.64 octaves wide, which is 40 dB - about the range from a
+ * quiet room to a raised voice - starting at a mean magnitude of roughly 50.
+ * Working in octaves also means the curve stays sensible whatever gain the
+ * codec is left at, so it does not have to be recalibrated.
+ */
+
+#define HS_MIC_LOG2_AT_ZERO  1444    /* log2(50) in 1/256 units */
+#define HS_MIC_LOG2_SPAN     1700    /* 6.64 octaves in 1/256 units */
+
+/****************************************************************************
+ * Name: hs_mic_log2_q8
+ *
+ * Description:
+ *   log2 of a positive integer, in 1/256 units, by linear interpolation
+ *   between powers of two.  Accurate to better than 0.1 octave, which is far
+ *   finer than a loudness meter needs.
+ *
+ ****************************************************************************/
+
+static int hs_mic_log2_q8(int32_t value)
+{
+  int     msb = 0;
+  int32_t base;
+
+  while ((value >> (msb + 1)) > 0)
+    {
+      msb++;
+    }
+
+  base = (int32_t)1 << msb;
+
+  return (msb << 8) + (int)(((value - base) << 8) / base);
+}
+
 int hs_mic_level(void)
 {
-  /* Map the mean magnitude onto 0..100 with a piecewise approximation of a
-   * logarithmic response, so quiet room noise sits near the bottom of the
-   * scale and speech climbs quickly.
-   *
-   * The break points assume a mean magnitude of roughly 30 in a quiet room
-   * and a few thousand for speech.  They are the one thing worth revisiting
-   * once real numbers are seen on the target.
-   */
-
   int mean = sf32lb_mic_mean();
+  int level;
 
   if (mean <= 0)
     {
       return 0;
     }
 
-  if (mean < 50)
+  level = (hs_mic_log2_q8(mean) - HS_MIC_LOG2_AT_ZERO) * 100
+          / HS_MIC_LOG2_SPAN;
+
+  if (level < 0)
     {
-      return mean * 40 / 50;                    /* 0 .. 40 */
+      level = 0;
     }
 
-  if (mean < 500)
-    {
-      return 40 + (mean - 50) * 40 / 450;       /* 40 .. 80 */
-    }
-
-  if (mean < 3000)
-    {
-      return 80 + (mean - 500) * 20 / 2500;     /* 80 .. 100 */
-    }
-
-  return 100;
+  return level > 100 ? 100 : level;
 }
 
 int hs_mic_mean(void)
 {
   return sf32lb_mic_mean();
+}
+
+int hs_mic_set_volume(int db)
+{
+  return sf32lb_mic_set_volume(db);
 }
 
 int hs_mic_peak(void)

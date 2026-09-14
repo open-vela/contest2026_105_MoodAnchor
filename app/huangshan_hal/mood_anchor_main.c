@@ -155,6 +155,7 @@ static lv_obj_t *g_lbl_sensors;
 
 static lv_obj_t *g_mic_arc;
 static lv_obj_t *g_lbl_mic_big;
+static lv_obj_t *g_lbl_mic_raw;
 static lv_obj_t *g_mic_peak_bar;
 static lv_obj_t *g_lbl_mic_peak;
 static volatile bool g_mic_ok;
@@ -644,6 +645,17 @@ static void ma_build_mic_page(lv_obj_t *tile)
   lv_obj_set_style_text_color(g_lbl_mic_big, lv_color_hex(MA_COLOR_TEXT), 0);
   lv_obj_set_style_text_font(g_lbl_mic_big, &lv_font_montserrat_48, 0);
   lv_obj_align(g_lbl_mic_big, LV_ALIGN_TOP_MID, 0, 52);
+
+  /* The unprocessed mean magnitude.  It is here because the meter can only
+   * be as good as the signal feeding it: a reading pinned near zero means
+   * the gain is wrong, not that the room is silent.
+   */
+
+  g_lbl_mic_raw = lv_label_create(card);
+  lv_label_set_text(g_lbl_mic_raw, "raw --");
+  lv_obj_set_style_text_color(g_lbl_mic_raw, lv_color_hex(MA_COLOR_MUTED), 0);
+  lv_obj_set_style_text_font(g_lbl_mic_raw, &lv_font_montserrat_16, 0);
+  lv_obj_align(g_lbl_mic_raw, LV_ALIGN_TOP_MID, 0, 120);
 
   card = ma_create_card(tile, 96);
   lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 280);
@@ -1192,6 +1204,7 @@ static void ma_mic_timer(lv_timer_t *timer)
         {
           last_level = last_peak = -2;
           lv_label_set_text(g_lbl_mic_big, "n/a");
+          lv_label_set_text(g_lbl_mic_raw, "raw --");
           lv_label_set_text(g_lbl_mic_peak, "--");
           lv_arc_set_value(g_mic_arc, 0);
           lv_bar_set_value(g_mic_peak_bar, 0, LV_ANIM_OFF);
@@ -1228,6 +1241,7 @@ static void ma_mic_timer(lv_timer_t *timer)
   lv_obj_set_style_arc_color(g_mic_arc, lv_color_hex(ma_mic_color(level)),
                              LV_PART_INDICATOR);
   lv_label_set_text_fmt(g_lbl_mic_big, "%d", level);
+  lv_label_set_text_fmt(g_lbl_mic_raw, "raw %d", hs_mic_mean());
 
   lv_bar_set_value(g_mic_peak_bar, peak, LV_ANIM_OFF);
   lv_label_set_text_fmt(g_lbl_mic_peak, "peak %d", peak);

@@ -564,6 +564,48 @@ static int hs_demo_imu(void)
   return ret;
 }
 
+static int hs_demo_mic_sweep(void)
+{
+  static const int gains[] = { -60, -40, -20, 0, 10, 20, 30 };
+  int ret;
+  int i;
+
+  ret = hs_mic_start();
+  if (ret < 0)
+    {
+      printf("mic_sweep: start failed (%d)\n", ret);
+      return ret;
+    }
+
+  printf("gain_db,mean,peak,level\n");
+
+  for (i = 0; i < (int)(sizeof(gains) / sizeof(gains[0])); i++)
+    {
+      int tick;
+
+      if (hs_mic_set_volume(gains[i]) < 0)
+        {
+          printf("%d,set failed\n", gains[i]);
+          continue;
+        }
+
+      /* Let a few blocks land at the new gain.  One block is 32 ms, so this
+       * is a little over three blocks' worth.
+       */
+
+      for (tick = 0; tick < 24; tick++)
+        {
+          hs_mic_service();
+          usleep(5000);
+        }
+
+      printf("%d,%d,%d,%d\n", gains[i], hs_mic_mean(), hs_mic_peak(),
+             hs_mic_level());
+    }
+
+  return OK;
+}
+
 static int hs_demo_mic_once(void)
 {
   int ret;
@@ -1987,6 +2029,10 @@ int huangshan_hal_demo_main(int argc, char *argv[])
   if (strcmp(name, "mic_stream") == 0)
     {
       return hs_demo_mic_stream();
+    }
+  if (strcmp(name, "mic_sweep") == 0)
+    {
+      return hs_demo_mic_sweep();
     }
   if (strcmp(name, "mic_dbg") == 0)
     {

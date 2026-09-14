@@ -116,6 +116,16 @@ int hs_mic_level(void);
 int hs_mic_mean(void);
 
 /****************************************************************************
+ * Name: hs_mic_set_volume
+ *
+ * Description:
+ *   Change the ADC path gain in dB (-60..+30) while capture is running.
+ *
+ ****************************************************************************/
+
+int hs_mic_set_volume(int db);
+
+/****************************************************************************
  * Name: hs_mic_peak
  *
  * Description:
