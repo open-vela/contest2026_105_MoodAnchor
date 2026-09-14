@@ -28,14 +28,18 @@
 #include <nuttx/config.h>
 
 #include <errno.h>
+#include <fcntl.h>
 #include <inttypes.h>
 #include <pthread.h>
 #include <sched.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include <nuttx/ioexpander/gpio.h>
 
 #include <lvgl/lvgl.h>
 
@@ -663,6 +667,41 @@ static const char *ma_state_text(bool node, bool active)
 }
 
 /****************************************************************************
+ * Name: ma_usb_present
+ *
+ * Description:
+ *   PA44 is wired to VBUS_DET and is exported as a GPIO character device.
+ *
+ *   This matters for the battery reading: while USB is attached the charger
+ *   holds the VBATS node at its own regulation point, so the voltage there no
+ *   longer says anything about the pack.  The caller uses this to show a
+ *   charging state instead of a meaningless number.
+ *
+ ****************************************************************************/
+
+static bool ma_usb_present(void)
+{
+  static int fd = -1;
+  bool       value = false;
+
+  if (fd < 0)
+    {
+      fd = open("/dev/gpio1", O_RDONLY);
+      if (fd < 0)
+        {
+          return false;
+        }
+    }
+
+  if (ioctl(fd, GPIOC_READ, (unsigned long)(uintptr_t)&value) < 0)
+    {
+      return false;
+    }
+
+  return value;
+}
+
+/****************************************************************************
  * Name: ma_update_battery
  *
  * Description:
@@ -702,34 +741,53 @@ static void ma_update_battery(void)
 
 static void ma_read_system(void)
 {
+  static int     last_mode      = -1;
   static int32_t last_batt      = -1;
   static char    last_list[256] = "";
   char           buf[256];
   int32_t        mv = g_vbat_mv;
+  bool           usb = ma_usb_present();
+  int            mode;
 
-  if (mv > 0)
+  /* While the charger is attached the VBATS node is clamped, so the only
+   * honest thing to show is the charging state.  A voltage is displayed
+   * exclusively when the pack is the sole supply.
+   */
+
+  mode = usb ? 1 : (mv > 0 ? 2 : 0);
+
+  if (mode != last_mode || (mode == 2 && mv != last_batt))
     {
-      /* 3.3 V .. 4.2 V mapped to 0..100 %: the pack the board ships with is a
-       * single cell that never drops far below 3.3 V under load.
-       */
+      last_mode = mode;
+      last_batt = mv;
 
-      int32_t pct = (mv - 3300) * 100 / 900;
-
-      if (pct < 0)   { pct = 0; }
-      if (pct > 100) { pct = 100; }
-
-      if (mv != last_batt)
+      switch (mode)
         {
-          last_batt = mv;
-          lv_label_set_text_fmt(g_lbl_batt_mv, "%d%%(%d.%01dV)",
-                                (int)pct, (int)(mv / 1000),
-                                (int)((mv % 1000) / 100));
+          case 1:
+            lv_label_set_text(g_lbl_batt_mv, "CHARGING");
+            break;
+
+          case 2:
+            {
+              /* 3.3 V .. 4.2 V mapped to 0..100 %: a single cell that never
+               * drops far below 3.3 V under this load.
+               */
+
+              int32_t pct = (mv - 3300) * 100 / 900;
+
+              if (pct < 0)   { pct = 0; }
+              if (pct > 100) { pct = 100; }
+
+              lv_label_set_text_fmt(g_lbl_batt_mv, "%d%%(%d.%01dV)",
+                                    (int)pct, (int)(mv / 1000),
+                                    (int)((mv % 1000) / 100));
+            }
+            break;
+
+          default:
+            lv_label_set_text(g_lbl_batt_mv, "--");
+            break;
         }
-    }
-  else if (last_batt != 0)
-    {
-      last_batt = 0;
-      lv_label_set_text(g_lbl_batt_mv, "--");
     }
 
   /* Two sources of truth: whether the node exists, and whether the sampling
