@@ -463,6 +463,34 @@ int hs_ble_data_notify(const struct hs_ble_sample_s *sample);
 const uint8_t *hs_ble_data_last(void);
 
 /****************************************************************************
+ * Name: hs_ble_stage
+ *
+ * Description:
+ *   Record how far the bring-up has got, in words, for the LINK page.
+ *
+ *   The numeric trace is not enough on its own: the whole point is to find
+ *   out where a failure *inside* the host stack bring-up happens, and that
+ *   path reports only an errno.  Text survives a freeze - the panel keeps
+ *   showing the last frame - so whatever the label says when the picture
+ *   stops is the answer.
+ *
+ *   Takes a printf format so callers can put the errno in the message.
+ *
+ ****************************************************************************/
+
+void hs_ble_stage(const char *fmt, ...);
+
+/****************************************************************************
+ * Name: hs_ble_stage_last
+ *
+ * Description:
+ *   Return the text set by the most recent hs_ble_stage() call.
+ *
+ ****************************************************************************/
+
+const char *hs_ble_stage_last(void);
+
+/****************************************************************************
  * Name: hs_ble_status_notify
  *
  * Description:

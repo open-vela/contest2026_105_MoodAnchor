@@ -81,22 +81,23 @@ int hs_ble_host_start(void)
   if (drv == NULL)
     {
       g_host_started = false;
+      hs_ble_stage("no vendor driver");
       nxmutex_unlock(&g_host_lock);
       return -ENODEV;
     }
 
-  /* The LCPU controller is reset independently of the SoC and can take a
-   * moment to answer the first commands after a cold power-up, which shows
-   * up as sync-command timeouts during bt_initialize().  Retry a few times.
-   */
-
   for (attempt = 0; attempt < 3; attempt++)
     {
+      hs_ble_stage("bt_netdev_register #%d", attempt + 1);
+
       ret = bt_netdev_register(drv);
       if (ret >= 0)
         {
+          hs_ble_stage("host up (try %d)", attempt + 1);
           break;
         }
+
+      hs_ble_stage("register fail %d try %d", ret, attempt + 1);
 
       wlerr("ERROR: bt_netdev_register failed: %d (attempt %d)\n",
             ret, attempt + 1);

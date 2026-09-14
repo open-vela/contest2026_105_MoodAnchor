@@ -204,6 +204,7 @@ static lv_obj_t *g_lbl_ble_info;
  * readable trace on screen when the console cannot be reached. */
 
 static lv_obj_t *g_lbl_ble_trace;
+static lv_obj_t *g_lbl_ble_stage;
 
 /* Arousal confirmation.
  *
@@ -1019,6 +1020,27 @@ static void ma_refresh_ble_ui(void)
       lv_label_set_text_fmt(g_lbl_ble_trace, "trace %d", trace);
     }
 
+  /* Refreshed every tick, not only on a state change: the stage text and the
+   * heap figure are what matter when something goes wrong, and they move
+   * while the state machine is still sitting in STARTING.
+   */
+
+  if (g_lbl_ble_stage != NULL)
+    {
+      static char last_stage[80] = "";
+      struct mallinfo mi = mallinfo();
+      char buf[80];
+
+      snprintf(buf, sizeof(buf), "%s\nheap %d KB", hs_ble_stage_last(),
+               mi.fordblks / 1024);
+
+      if (strcmp(buf, last_stage) != 0)
+        {
+          memcpy(last_stage, buf, sizeof(last_stage));
+          lv_label_set_text(g_lbl_ble_stage, buf);
+        }
+    }
+
   /* lv_label_set_text_fmt() reallocates the string and invalidates the
    * widget on every call, even when the resulting text is identical.  This
    * runs 2x per second, so leave the widgets alone unless the state machine
@@ -1144,6 +1166,21 @@ static void ma_build_link_page(lv_obj_t *tile)
   lv_obj_set_style_text_font(g_lbl_ble_trace, &lv_font_montserrat_16, 0);
   lv_obj_align(g_lbl_ble_trace, LV_ALIGN_TOP_MID, 0, 270);
   lv_label_set_text(g_lbl_ble_trace, "trace 0");
+
+  /* TEMPORARY: the bring-up stage in words, plus the free heap.  The picture
+   * freezes at the moment of a fault, so whatever these say when it stops is
+   * the whole diagnosis - no serial console needed.
+   */
+
+  g_lbl_ble_stage = lv_label_create(tile);
+  lv_obj_set_style_text_color(g_lbl_ble_stage, lv_color_hex(MA_COLOR_ACCENT),
+                              0);
+  lv_obj_set_style_text_font(g_lbl_ble_stage, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_align(g_lbl_ble_stage, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_width(g_lbl_ble_stage, LV_PCT(96));
+  lv_label_set_long_mode(g_lbl_ble_stage, LV_LABEL_LONG_WRAP);
+  lv_obj_align(g_lbl_ble_stage, LV_ALIGN_TOP_MID, 0, 296);
+  lv_label_set_text(g_lbl_ble_stage, "-");
 }
 
 /****************************************************************************
@@ -2677,16 +2714,19 @@ static FAR void *ma_ble_start_worker(FAR void *arg)
   if (ret >= 0)
     {
       hs_ble_trace(HS_BLE_TRACE_HOST_UP);
+      hs_ble_stage("gatt_start");
       ret = hs_ble_gatt_start(NULL);
 
       if (ret >= 0)
         {
           hs_ble_trace(HS_BLE_TRACE_GATT);
+          hs_ble_stage("adv on, worker next");
         }
     }
 
   if (ret < 0)
     {
+      hs_ble_stage("start FAILED %d", ret);
       printf("MoodAnchor: BLE start failed (%d)\n", ret);
       g_ble_state = MA_BLE_FAILED;
       return NULL;
@@ -2724,6 +2764,21 @@ static FAR void *ma_ble_start_worker(FAR void *arg)
 static void ma_ble_start_async(void)
 {
   hs_ble_trace(HS_BLE_TRACE_SWITCH);
+  hs_ble_stage("switch tapped");
+
+  /* Put the first stage on the panel right now.  The bring-up worker starts
+   * above this thread's priority, so relying on the next UI tick is a race it
+   * can lose.
+   */
+
+  if (g_lbl_ble_stage != NULL)
+    {
+      lv_label_set_text_fmt(g_lbl_ble_stage, "%s\nheap %d KB",
+                            hs_ble_stage_last(),
+                            (int)(mallinfo().fordblks / 1024));
+      lv_refr_now(NULL);
+    }
+
   pthread_attr_t attr;
   struct sched_param param;
 

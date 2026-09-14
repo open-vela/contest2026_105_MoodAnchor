@@ -30,6 +30,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdarg.h>
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
@@ -440,6 +441,41 @@ static volatile bool g_peer_connected;
  */
 
 static volatile bool g_adv_restart;
+
+/* TEMPORARY: see hs_ble_stage() in hs_ble.h. */
+
+static char g_ble_stage[48] = "idle";
+
+void hs_ble_stage(const char *fmt, ...)
+{
+  va_list ap;
+
+  if (fmt == NULL)
+    {
+      return;
+    }
+
+  va_start(ap, fmt);
+  vsnprintf(g_ble_stage, sizeof(g_ble_stage), fmt, ap);
+  va_end(ap);
+
+  /* TEMPORARY: give the LVGL thread time to put this on the panel.
+   *
+   * The bring-up worker runs at SCHED_FIFO priority 120, above the UI, so
+   * without this pause it can reach the fault before the label is ever
+   * drawn - and then the frozen picture still shows the previous stage,
+   * which is worse than useless.  Every stage therefore waits for one UI
+   * refresh before moving on.  Remove together with the trace and stage
+   * instrumentation.
+   */
+
+  usleep(700000);
+}
+
+const char *hs_ble_stage_last(void)
+{
+  return g_ble_stage;
+}
 
 /* TEMPORARY: see hs_ble_trace() in hs_ble.h. */
 
