@@ -294,8 +294,8 @@ static void ma_build_system_page(lv_obj_t *tile)
 
   card = ma_create_card(tile, 120);
   lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 44);
-  ma_create_caption(card, "Battery (VBATS)");
-  g_lbl_batt_mv = ma_create_value(card, "-- V", &lv_font_montserrat_48,
+  ma_create_caption(card, "Battery");
+  g_lbl_batt_mv = ma_create_value(card, "--", &lv_font_montserrat_48,
                                   MA_COLOR_ACCENT);
 
   card = ma_create_card(tile, 200);
@@ -709,17 +709,27 @@ static void ma_read_system(void)
 
   if (mv > 0)
     {
+      /* 3.3 V .. 4.2 V mapped to 0..100 %: the pack the board ships with is a
+       * single cell that never drops far below 3.3 V under load.
+       */
+
+      int32_t pct = (mv - 3300) * 100 / 900;
+
+      if (pct < 0)   { pct = 0; }
+      if (pct > 100) { pct = 100; }
+
       if (mv != last_batt)
         {
           last_batt = mv;
-          lv_label_set_text_fmt(g_lbl_batt_mv, "%d.%02d V", (int)(mv / 1000),
-                                (int)((mv % 1000) / 10));
+          lv_label_set_text_fmt(g_lbl_batt_mv, "%d%%(%d.%01dV)",
+                                (int)pct, (int)(mv / 1000),
+                                (int)((mv % 1000) / 100));
         }
     }
   else if (last_batt != 0)
     {
       last_batt = 0;
-      lv_label_set_text(g_lbl_batt_mv, "-- V");
+      lv_label_set_text(g_lbl_batt_mv, "--");
     }
 
   /* Two sources of truth: whether the node exists, and whether the sampling
