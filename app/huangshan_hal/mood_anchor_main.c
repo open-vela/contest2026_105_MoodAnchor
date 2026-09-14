@@ -69,6 +69,30 @@
 
 #define MA_REFRESH_MS      500
 
+/* GSR classification ------------------------------------------------------
+ *
+ * The absolute conductance reading is not a mood score: it depends on how
+ * the electrodes sit, on skin moisture and on temperature, and it drifts for
+ * minutes.  What is meaningful is whether the signal leaves a band around a
+ * baseline that was captured while the subject was calm.  The page therefore
+ * reports a classification, not a number.
+ *
+ * A Grove GSR board outputs a few hundred millivolts with the electrodes
+ * floating and roughly 2 V on skin, so a low reading is treated as "not
+ * attached" rather than as an extremely relaxed subject.
+ */
+
+#define MA_GSR_NO_ELECTRODE   0         /* electrodes not on skin */
+#define MA_GSR_UNCALIBRATED   1         /* on skin, no baseline yet */
+#define MA_GSR_STABLE         2         /* inside the band */
+#define MA_GSR_CHANGED        3         /* outside the band */
+
+#define MA_GSR_ELECTRODE_MV   1000      /* below this the pads are floating */
+#define MA_GSR_BAND_STEP      50        /* adjustment step of the -/+ keys */
+#define MA_GSR_BAND_MIN       50
+#define MA_GSR_BAND_MAX       500
+#define MA_GSR_BAND_DEFAULT   150
+
 #define MA_COLOR_BG        0x101418
 #define MA_COLOR_CARD      0x1c2530
 #define MA_COLOR_TEXT      0xe8eef5
@@ -88,6 +112,8 @@ static lv_obj_t *g_dots[MA_PAGE_COUNT];
 static lv_obj_t *g_lbl_mood_value;
 static lv_obj_t *g_lbl_mood_state;
 static lv_obj_t *g_lbl_gsr_mv;
+static lv_obj_t *g_lbl_gsr_rest;
+static lv_obj_t *g_lbl_gsr_band;
 
 /* System page (battery + sensor inventory) */
 
@@ -156,8 +182,15 @@ static pthread_t        g_ppg_thread;
 
 /* Latest samples */
 
+/* Latest GSR reading and the classification parameters.  All of these are
+ * only ever touched from the UI thread, so plain variables are enough.
+ */
+
 static int32_t g_gsr_mv;
 static bool    g_gsr_valid;
+static int32_t g_gsr_rest;                    /* resting baseline, 0 = unset */
+static int32_t g_gsr_band = MA_GSR_BAND_DEFAULT;
+static volatile int g_gsr_class = MA_GSR_NO_ELECTRODE;
 
 static uint32_t g_hr_bpm;
 static uint32_t g_spo2;
@@ -192,6 +225,9 @@ static pthread_t    g_ble_start_thread;
 
 static void ma_ble_start_async(void);
 static void ma_ble_stop(void);
+
+static void ma_gsr_cal_event(lv_event_t *event);
+static void ma_gsr_band_event(lv_event_t *event);
 
 /****************************************************************************
  * Name: ma_create_card
@@ -318,28 +354,89 @@ static void ma_build_system_page(lv_obj_t *tile)
  * Name: ma_build_mood_page
  ****************************************************************************/
 
+static lv_obj_t *ma_create_key(lv_obj_t *parent, const char *text,
+                               lv_coord_t width, lv_event_cb_t cb,
+                               void *user_data)
+{
+  lv_obj_t *key = lv_obj_create(parent);
+  lv_obj_t *lbl;
+
+  lv_obj_set_size(key, width, 44);
+  lv_obj_set_style_bg_color(key, lv_color_hex(MA_COLOR_CARD), 0);
+  lv_obj_set_style_bg_opa(key, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(key, 12, 0);
+  lv_obj_set_style_border_width(key, 1, 0);
+  lv_obj_set_style_border_color(key, lv_color_hex(MA_COLOR_MUTED), 0);
+  lv_obj_set_style_border_opa(key, LV_OPA_40, 0);
+  lv_obj_clear_flag(key, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_event_cb(key, cb, LV_EVENT_CLICKED, user_data);
+
+  lbl = lv_label_create(key);
+  lv_label_set_text(lbl, text);
+  lv_obj_set_style_text_color(lbl, lv_color_hex(MA_COLOR_TEXT), 0);
+  lv_obj_center(lbl);
+
+  return key;
+}
+
+/****************************************************************************
+ * Name: ma_build_mood_page
+ ****************************************************************************/
+
 static void ma_build_mood_page(lv_obj_t *tile)
 {
   lv_obj_t *card;
+  lv_obj_t *key;
 
   ma_create_page_header(tile, "MOOD / SKIN");
 
-  card = ma_create_card(tile, 150);
+  card = ma_create_card(tile, 140);
   lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 44);
-  ma_create_caption(card, "Mood index");
+  ma_create_caption(card, "State");
   g_lbl_mood_value = ma_create_value(card, "--", &lv_font_montserrat_48,
                                      MA_COLOR_ACCENT);
 
-  card = ma_create_card(tile, 96);
-  lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 208);
-  ma_create_caption(card, "Conductance");
-  g_lbl_gsr_mv = ma_create_value(card, "-- mV", &lv_font_montserrat_28,
-                                 MA_COLOR_TEXT);
+  card = ma_create_card(tile, 120);
+  lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 196);
+  ma_create_caption(card, "Baseline");
+
+  g_lbl_gsr_mv = lv_label_create(card);
+  lv_obj_set_style_text_color(g_lbl_gsr_mv, lv_color_hex(MA_COLOR_TEXT), 0);
+  lv_obj_set_style_text_font(g_lbl_gsr_mv, &lv_font_montserrat_16, 0);
+  lv_obj_align(g_lbl_gsr_mv, LV_ALIGN_TOP_LEFT, 0, 26);
+
+  g_lbl_gsr_rest = lv_label_create(card);
+  lv_obj_set_style_text_color(g_lbl_gsr_rest, lv_color_hex(MA_COLOR_TEXT), 0);
+  lv_obj_set_style_text_font(g_lbl_gsr_rest, &lv_font_montserrat_16, 0);
+  lv_obj_align(g_lbl_gsr_rest, LV_ALIGN_TOP_LEFT, 0, 48);
+
+  g_lbl_gsr_band = lv_label_create(card);
+  lv_obj_set_style_text_color(g_lbl_gsr_band, lv_color_hex(MA_COLOR_TEXT), 0);
+  lv_obj_set_style_text_font(g_lbl_gsr_band, &lv_font_montserrat_16, 0);
+  lv_obj_align(g_lbl_gsr_band, LV_ALIGN_TOP_LEFT, 0, 70);
+
+  /* Capture takes the current reading as "resting"; the two small keys widen
+   * or narrow the tolerance band around it.
+   */
+
+  ma_create_key(tile, "Capture", 160, ma_gsr_cal_event, NULL);
+  key = lv_obj_get_child(tile, -1);
+  lv_obj_align(key, LV_ALIGN_TOP_LEFT, 22, 330);
+
+  ma_create_key(tile, "-", 70, ma_gsr_band_event, (void *)(intptr_t)-1);
+  key = lv_obj_get_child(tile, -1);
+  lv_obj_align(key, LV_ALIGN_TOP_LEFT, 196, 330);
+
+  ma_create_key(tile, "+", 70, ma_gsr_band_event, (void *)(intptr_t)1);
+  key = lv_obj_get_child(tile, -1);
+  lv_obj_align(key, LV_ALIGN_TOP_LEFT, 276, 330);
+
   g_lbl_mood_state = lv_label_create(tile);
   lv_obj_set_style_text_color(g_lbl_mood_state, lv_color_hex(MA_COLOR_MUTED),
                               0);
-  lv_obj_align(g_lbl_mood_state, LV_ALIGN_TOP_MID, 0, 314);
-  lv_label_set_text(g_lbl_mood_state, "GSR: waiting for data");
+  lv_obj_set_style_text_font(g_lbl_mood_state, &lv_font_montserrat_16, 0);
+  lv_obj_align(g_lbl_mood_state, LV_ALIGN_TOP_MID, 0, 386);
+  lv_label_set_text(g_lbl_mood_state, "Capture while calm");
 }
 
 /****************************************************************************
@@ -825,17 +922,19 @@ static void ma_read_system(void)
 
 static void ma_read_gsr(void)
 {
-  static int32_t  last_mv   = -1;
-  static int32_t  last_mood = -1;
-  static uint32_t last_raw  = 0xffffffffu;
+  static int     last_class = -1;
+  static int32_t last_mv    = -1;
+  static int32_t last_rest  = -1;
+  static int32_t last_band  = -1;
   struct hs_gsr_sample_s sample;
-  int32_t mood;
+  int32_t mv;
+  int     class;
 
   if (!g_gsr_open)
     {
       if (hs_gsr_open(&g_gsr) < 0)
         {
-          lv_label_set_text(g_lbl_mood_state, "GSR: /dev/adc1 not available");
+          lv_label_set_text(g_lbl_mood_state, "/dev/adc1 not available");
           return;
         }
 
@@ -844,50 +943,170 @@ static void ma_read_gsr(void)
 
   if (hs_gsr_read(&g_gsr, &sample) < 0)
     {
-      lv_label_set_text(g_lbl_mood_state, "GSR: read error");
       return;
     }
 
-  g_gsr_mv = sample.adc_mv;
+  g_gsr_mv    = sample.adc_mv;
   g_gsr_valid = true;
+
+  /* Keep the raw reading flowing to the BLE characteristics: the phone gets
+   * the sample, the classification stays a local decision.
+   */
 
   g_ble_gsr_mv = sample.adc_mv;
   g_ble_gsr_ok = 1;
 
-  /* Very simple mapping: the Grove GSR output sits near mid scale when the
-   * electrodes are relaxed and rises with arousal.  This is a display
-   * helper, the real calibration lives in the GSR HAL.
+  mv = g_gsr_mv;
+
+  if (mv < MA_GSR_ELECTRODE_MV)
+    {
+      class = MA_GSR_NO_ELECTRODE;
+    }
+  else if (g_gsr_rest == 0)
+    {
+      class = MA_GSR_UNCALIBRATED;
+    }
+  else if (mv > g_gsr_rest + g_gsr_band || mv < g_gsr_rest - g_gsr_band)
+    {
+      class = MA_GSR_CHANGED;
+    }
+  else
+    {
+      class = MA_GSR_STABLE;
+    }
+
+  g_gsr_class = class;
+
+  /* A resting trace repeats the same reading for many consecutive samples
+   * and every label update reallocates its string, so skip the refresh
+   * unless something actually moved.
    */
 
-  mood = 100 - ((g_gsr_mv - 200) * 100 / 800);
-
-  if (mood < 0)
-    {
-      mood = 0;
-    }
-  else if (mood > 100)
-    {
-      mood = 100;
-    }
-
-  /* A resting GSR trace repeats the same reading for many consecutive
-   * samples and lv_label_set_text_fmt() reallocates + invalidates on every
-   * call, so skip the update when nothing moved.
-   */
-
-  if (g_gsr_mv == last_mv && mood == last_mood && sample.raw10 == last_raw)
+  if (class == last_class && mv == last_mv && g_gsr_rest == last_rest &&
+      g_gsr_band == last_band)
     {
       return;
     }
 
-  last_mv   = g_gsr_mv;
-  last_mood = mood;
-  last_raw  = sample.raw10;
+  last_class = class;
+  last_mv    = mv;
+  last_rest  = g_gsr_rest;
+  last_band  = g_gsr_band;
 
-  lv_label_set_text_fmt(g_lbl_gsr_mv, "%" PRId32 " mV", g_gsr_mv);
-  lv_label_set_text_fmt(g_lbl_mood_value, "%" PRId32, mood);
-  lv_label_set_text_fmt(g_lbl_mood_state, "GSR %" PRId32 " mV  (raw %u)",
-                        g_gsr_mv, sample.raw10);
+  switch (class)
+    {
+      case MA_GSR_NO_ELECTRODE:
+        lv_label_set_text(g_lbl_mood_value, "off");
+        lv_obj_set_style_text_color(g_lbl_mood_value,
+                                    lv_color_hex(MA_COLOR_MUTED), 0);
+        break;
+
+      case MA_GSR_UNCALIBRATED:
+        lv_label_set_text(g_lbl_mood_value, "rest");
+        lv_obj_set_style_text_color(g_lbl_mood_value,
+                                    lv_color_hex(0xffc14d), 0);
+        break;
+
+      case MA_GSR_CHANGED:
+        lv_label_set_text(g_lbl_mood_value, "CHANGED");
+        lv_obj_set_style_text_color(g_lbl_mood_value,
+                                    lv_color_hex(0xff6b81), 0);
+        break;
+
+      default:
+        lv_label_set_text(g_lbl_mood_value, "STABLE");
+        lv_obj_set_style_text_color(g_lbl_mood_value,
+                                    lv_color_hex(MA_COLOR_ACCENT), 0);
+        break;
+    }
+
+  lv_label_set_text_fmt(g_lbl_gsr_mv, "Current  %" PRId32 " mV", mv);
+
+  if (g_gsr_rest > 0)
+    {
+      lv_label_set_text_fmt(g_lbl_gsr_rest, "Resting  %" PRId32 " mV",
+                            g_gsr_rest);
+    }
+  else
+    {
+      lv_label_set_text(g_lbl_gsr_rest, "Resting  --  tap Capture");
+    }
+
+  lv_label_set_text_fmt(g_lbl_gsr_band, "Band     +/- %" PRId32 " mV",
+                        g_gsr_band);
+
+  switch (class)
+    {
+      case MA_GSR_NO_ELECTRODE:
+        lv_label_set_text(g_lbl_mood_state, "Electrodes not on skin");
+        break;
+
+      case MA_GSR_UNCALIBRATED:
+        lv_label_set_text(g_lbl_mood_state, "Tap Capture while calm");
+        break;
+
+      case MA_GSR_CHANGED:
+        lv_label_set_text(g_lbl_mood_state, "Outside the rest band");
+        break;
+
+      default:
+        lv_label_set_text(g_lbl_mood_state, "Within the rest band");
+        break;
+    }
+}
+
+/****************************************************************************
+ * Name: ma_gsr_cal_event
+ *
+ * Description:
+ *   Capture the current reading as the resting baseline.  "Resting" depends
+ *   on how the electrodes sit on the skin, so it can only be sampled, never
+ *   hardcoded.
+ *
+ ****************************************************************************/
+
+static void ma_gsr_cal_event(lv_event_t *event)
+{
+  (void)event;
+
+  if (g_gsr_mv < MA_GSR_ELECTRODE_MV)
+    {
+      /* Nothing to capture while the pads are floating: storing that reading
+       * would make every later sample look like a change.
+       */
+
+      lv_label_set_text(g_lbl_mood_state, "Attach the electrodes first");
+      return;
+    }
+
+  g_gsr_rest = g_gsr_mv;
+  lv_label_set_text(g_lbl_mood_state, "Baseline captured");
+}
+
+/****************************************************************************
+ * Name: ma_gsr_band_event
+ *
+ * Description:
+ *   Widen or narrow the tolerance band.  The step direction is passed as the
+ *   user data of the button (+1 / -1).
+ *
+ ****************************************************************************/
+
+static void ma_gsr_band_event(lv_event_t *event)
+{
+  intptr_t step = (intptr_t)lv_event_get_user_data(event);
+  int32_t  band = g_gsr_band + (int32_t)step * MA_GSR_BAND_STEP;
+
+  if (band < MA_GSR_BAND_MIN)
+    {
+      band = MA_GSR_BAND_MIN;
+    }
+  else if (band > MA_GSR_BAND_MAX)
+    {
+      band = MA_GSR_BAND_MAX;
+    }
+
+  g_gsr_band = band;
 }
 
 /****************************************************************************
