@@ -25,7 +25,23 @@ extern "C"
 #define HS_I2C_DEFAULT_FREQUENCY 400000u
 #define HS_ADC_DEVICE            "/dev/adc0"
 #define HS_ADC_GSR_DEVICE        "/dev/adc1"
-#define HS_ADC_VBAT_CHANNEL      7  /* GPADC1 channel 7 = battery (doc calls it CH8) */
+
+/* Battery voltage sense.
+ *
+ * Pin 61 (VBATS) of the module is documented as "battery voltage detection
+ * input": the value is sampled by an internal ADC channel, which is the
+ * eighth input of the 12-bit SAR (GPADC_CH8 in SiFli's one-based numbering,
+ * i.e. index 7 in code).  The seven external inputs are GPADC_CH1..CH7.
+ *
+ * The module quotes a 0~4.7 V input range against a 3.3 V ADC, so the signal
+ * is attenuated on chip; the measured reading is about half the pack
+ * voltage.  Scaling is applied by hs_battery_read_mv() rather than at every
+ * call site.  If the reported voltage ever looks systematically wrong, this
+ * is the one number to revisit.
+ */
+
+#define HS_ADC_VBAT_CHANNEL      7
+#define HS_ADC_VBAT_DIVIDER      2
 #define HS_ADC_GSR_CHANNEL       0
 #define HS_BUTTONS_DEVICE        "/dev/buttons"
 #define HS_VIBRATION_DEVICE      "/dev/gpio3" /* PA20, 30P-24 VIB PWM */
@@ -92,6 +108,20 @@ struct hs_adc_s
 int hs_adc_open(struct hs_adc_s *adc, const char *devpath);
 void hs_adc_close(struct hs_adc_s *adc);
 int hs_adc_read(struct hs_adc_s *adc, uint8_t channel, int32_t *value);
+
+/****************************************************************************
+ * Name: hs_battery_read_mv
+ *
+ * Description:
+ *   Read the battery voltage in millivolts, with the on-chip attenuation of
+ *   the VBATS sense input already compensated.
+ *
+ * Returned Value:
+ *   Zero on success, a negated errno value otherwise.
+ *
+ ****************************************************************************/
+
+int hs_battery_read_mv(struct hs_adc_s *adc, int32_t *mv);
 
 /* Grove GSR/皮电 interface.  This is a small, synchronous API intended for
  * application code; it does not create a sampling thread or claim the ADC

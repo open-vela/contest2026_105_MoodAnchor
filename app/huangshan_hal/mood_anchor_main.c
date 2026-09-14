@@ -847,7 +847,7 @@ static FAR void *ma_sys_thread(FAR void *arg)
           g_batt_open = true;
         }
 
-      if (hs_adc_read(&g_batt, HS_ADC_VBAT_CHANNEL, &mv) == 0 && mv > 0)
+      if (hs_battery_read_mv(&g_batt, &mv) == 0 && mv > 0)
         {
           g_vbat_mv = mv;
         }

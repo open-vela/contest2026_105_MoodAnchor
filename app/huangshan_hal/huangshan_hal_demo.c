@@ -869,7 +869,11 @@ static int hs_demo_power(void)
   adcret = hs_adc_open(&adc, NULL);
   if (adcret >= 0)
     {
-      adcret = hs_adc_read(&adc, HS_ADC_VBAT_CHANNEL, &vbat);
+      /* Compensates the on-chip attenuation of the VBATS sense input, so the
+       * value printed below is the pack voltage rather than half of it.
+       */
+
+      adcret = hs_battery_read_mv(&adc, &vbat);
     }
 
   buttonret = hs_buttons_open(&buttons, NULL);

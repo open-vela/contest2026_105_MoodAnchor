@@ -338,6 +338,32 @@ int hs_max30102_read_sample(struct hs_max30102_s *sensor,
   return 0;
 }
 
+int hs_battery_read_mv(struct hs_adc_s *adc, int32_t *mv)
+{
+  int32_t raw;
+  int     ret;
+
+  if (mv == NULL)
+    {
+      return -EINVAL;
+    }
+
+  ret = hs_adc_read(adc, HS_ADC_VBAT_CHANNEL, &raw);
+  if (ret < 0)
+    {
+      return ret;
+    }
+
+  /* VBATS is attenuated on chip: the module accepts 0~4.7 V on that pin
+   * while the ADC reference tops out at 3.3 V, and the measured reading is
+   * about half the pack voltage.  Undo that here so every caller works in
+   * real millivolts.
+   */
+
+  *mv = raw * HS_ADC_VBAT_DIVIDER;
+  return 0;
+}
+
 int hs_adc_open(struct hs_adc_s *adc, const char *devpath)
 {
   if (adc == NULL)
