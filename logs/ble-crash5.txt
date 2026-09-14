@@ -1,3 +1,161 @@
 
 === [00:34:19] port opened ===
 [00:34:19] SFBL
+[00:34:21] AB[00:34:22] CD[0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc0 init done, ret=0
+[0m[00:34:22] [0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc1 init done, ret=0
+[0m[00:34:22] [0mINFO: LSM6DS3 test device registered as /dev/lsm6dsl0, INT=31
+[0m[0m[33mWARN: skip HAL_FLASH_Init during XIP bringup, NOR write/erase disabled
+[0m[0mINFO: NOR MTD registered at /dev/config0 (offset=2464 blocks=1024)
+[0m[00:34:24] mood_anchor [8:100]
+
+NuttShell (NSH)
+nsh> [K[0m[31;1m[LVGL] [User]	(2.710, +2710)	 check_stack_size: tid: 8, Stack size : 40856 lv_nuttx_entry.c:283
+[0m[0m[31;1m[LVGL] [User]	(2.712, +2)	 lv_nuttx_lcd_create: lcd /dev/lcd0 opening lv_nuttx_lcd.c:77
+[0m[0m[31;1m[LVGL] [User]	(2.715, +3)	 lv_nuttx_lcd_create: lcd /dev/lcd0 open success lv_nuttx_lcd.c:84
+[0m[0m[31;1m[LVGL] [User]	(2.728, +13)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 opening lv_nuttx_touchscreen.c:79
+[0m[0m[31;1m[LVGL] [User]	(2.731, +3)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 open success, maxpoint 1 lv_nuttx_touchscreen.c:98
+[0m[00:34:25] [ui] 1
+MoodAnchor UI running (swipe for VITALS / MOTION / LINK)
+[00:34:25] mood: microphone started
+[00:34:27] [ui] 5
+[00:34:29] [ui] 9
+[00:34:31] [ui] 13
+[00:34:33] [ui] 17
+[00:34:35] [ui] 21
+[00:34:37] [ui] 25
+[00:34:39] [ui] 29
+[00:34:41] [ui] 33
+[00:34:43] [ui] 37
+[00:34:45] [ui] 41
+[00:34:47] [ui] 45
+[00:34:49] [ui] 49
+[00:34:51] [ui] 53
+[00:34:53] [ui] 57
+[00:34:55] [ui] 61
+[00:34:57] [ui] 65
+[00:34:59] [ui] 69
+[00:35:01] [ui] 73
+[00:35:04] [ui] 77
+[00:35:06] [ui] 81
+[00:35:08] [ui] 85
+[00:35:10] [ui] 89
+[00:35:12] [ui] 93
+[00:35:14] [ui] 97
+[00:35:16] [ui] 101
+[00:35:18] [ui] 105
+[00:35:20] [ui] 109
+[00:35:22] [ui] 113
+[00:35:24] [ui] 117
+[00:35:26] [ui] 121
+[00:35:28] [ui] 125
+[00:35:30] [ui] 129
+[00:35:32] [ui] 133
+[00:35:34] [ui] 137
+[00:35:36] [ui] 141
+[00:35:38] [ui] 145
+[00:35:41] [ui] 149
+[00:35:43] [ui] 153
+[00:35:45] [ui] 157
+[00:35:47] [ui] 161
+[00:35:49] [ui] 165
+[00:35:51] [ui] 169
+[00:35:53] [ui] 173
+[00:35:55] [ui] 177
+[00:35:57] [ui] 181
+[00:35:59] [ui] 185
+[00:36:01] [ui] 189
+[00:36:03] [ui] 193
+[00:36:05] [ui] 197
+[00:36:07] [ui] 201
+[00:36:09] [ui] 205
+[00:36:11] [ui] 209
+[00:36:13] [ui] 213
+[00:36:15] [ui] 217
+[00:36:17] [ui] 221
+[00:36:19] [ui] 225
+[00:36:21] [ui] 229
+[00:36:23] [ui] 233
+[00:36:25] [ui] 237
+[00:36:27] [ui] 241
+[00:36:29] [ui] 245
+[00:36:31] [ui] 249
+[00:36:33] [ui] 253
+[00:36:35] [ui] 257
+[00:36:37] mood: agitation marked a false alarm (0/1)
+[00:36:38] [ui] 261
+[00:36:40] [ui] 265
+[00:36:43] sf32lb52 bt: LCPU up in 1460 ms
+hci_event: WARNING:  Unhandled event 0x10
+[00:36:43] [ui] 269
+[00:36:45] hci_initialize: ERROR: BT_HCI_OP_RESET failed: -110
+[0m[31msf32lb52 bt tx busy: rd=00000000 wr=00040000
+[0mbt_initialize: ERROR:  hci_initialize failed: -110
+[ui] 273
+[00:36:46] hs_ble_host_start: ERROR: bt_netdev_register failed: -110 (attempt 1)
+[00:36:47] [ui] 277
+[00:36:49] [ui] 281
+[00:36:50] hci_initialize: ERROR: BT_HCI_OP_RESET failed: -110
+[0m[31msf32lb52 bt tx busy: rd=00000000 wr=00040000
+[0mbt_initialize: ERROR:  hci_initialize failed: -110
+[00:36:51] hs_ble_host_start: ERROR: bt_netdev_register failed: -110 (attempt 2)
+[00:36:51] [ui] 285
+[00:36:53] [ui] 289
+[00:36:55] hci_initialize: ERROR: BT_HCI_OP_RESET failed: -110
+[00:36:55] [0m[31msf32lb52 bt tx busy: rd=00000000 wr=00040000
+[0mbt_initialize: ERROR:  hci_initialize failed: -110
+[ui] 293
+[00:36:56] hs_ble_host_start: ERROR: bt_netdev_register failed: -110 (attempt 3)
+[00:36:57] MoodAnchor: BLE start failed (-110)
+[00:36:57] [ui] 297
+[00:36:59] [ui] 301
+[00:37:02] [ui] 305
+[00:37:04] [ui] 309
+[00:37:06] [ui] 313
+[00:37:08] [ui] 317
+[00:37:10] [ui] 321
+[00:37:12] [ui] 325
+[00:37:14] [ui] 329
+[00:37:16] [ui] 333
+[00:37:18] [ui] 337
+[00:37:20] [ui] 341
+[00:37:22] [ui] 345
+[00:37:24] [ui] 349
+[00:37:26] [ui] 353
+[00:37:28] [ui] 357
+[00:37:30] [ui] 361
+[00:37:32] [ui] 365
+[00:37:35] [ui] 369
+[00:37:37] [ui] 373
+[00:37:39] [ui] 377
+[00:37:41] [ui] 381
+[00:37:43] [ui] 385
+[00:37:45] [ui] 389
+[00:37:47] [ui] 393
+[00:37:49] [ui] 397
+[00:37:51] [ui] 401
+[00:37:53] [ui] 405
+[00:37:55] [ui] 409
+[00:37:57] [ui] 413
+[00:37:59] [ui] 417
+[00:38:01] [ui] 421
+[00:38:03] [ui] 425
+[00:38:05] [ui] 429
+[00:38:07] [ui] 433
+[00:38:09] [ui] 437
+[00:38:11] [ui] 441
+[00:38:14] [ui] 445
+[00:38:16] [ui] 449
+[00:38:18] [ui] 453
+[00:38:20] [ui] 457
+[00:38:22] [ui] 461
+[00:38:24] [ui] 465
+[00:38:26] [ui] 469
+[00:38:28] [ui] 473
+[00:38:30] [ui] 477
+[00:38:32] [ui] 481
+[00:38:34] [ui] 485
+[00:38:36] [ui] 489
