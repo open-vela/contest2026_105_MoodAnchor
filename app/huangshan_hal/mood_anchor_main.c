@@ -44,6 +44,7 @@
 
 #include "huangshan_hal.h"
 #include "hs_ble.h"
+#include "hs_ppg.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -110,6 +111,25 @@ static bool g_max_open;
 static bool g_batt_open;
 static bool g_vib_open;
 static bool g_btn_open;
+
+/* PPG pipeline.  The MAX30102 produces 100 samples per second and needs to
+ * be drained at that rate for the beat detector to see the pulse waveform,
+ * which the 2 Hz UI timer can never do.  A dedicated thread therefore owns
+ * the sensor and the algorithm; the UI and the BLE data thread only read the
+ * published results.
+ */
+
+#define MA_PPG_ABSENT   0       /* sensor not on the bus */
+#define MA_PPG_WAITING  1       /* present, no usable pulse yet */
+#define MA_PPG_OK       2       /* measuring */
+
+static struct hs_ppg_s  g_ppg;
+static volatile bool    g_ppg_run;
+static volatile int     g_ppg_state = MA_PPG_ABSENT;
+static volatile int     g_ppg_hr;
+static volatile int     g_ppg_spo2;
+static volatile int     g_ppg_quality;
+static pthread_t        g_ppg_thread;
 
 /* Latest samples */
 
@@ -622,77 +642,55 @@ static void ma_read_gsr(void)
 
 static void ma_read_vitals(void)
 {
-  static uint32_t last_hr   = 0xffffffffu;
-  static uint32_t last_spo2 = 0xffffffffu;
-  static uint32_t last_red  = 0xffffffffu;
-  static uint32_t last_ir   = 0xffffffffu;
-  struct hs_max30102_sample_s sample;
+  static int last_state = -1;
+  static int last_hr;
+  static int last_spo2;
+  static int last_quality;
+  int        state   = g_ppg_state;
+  int        hr      = g_ppg_hr;
+  int        spo2    = g_ppg_spo2;
+  int        quality = g_ppg_quality;
 
-  if (!g_max_open)
-    {
-      if (hs_max30102_open(&g_max, HS_MAX30102_I2C_BUS) < 0)
-        {
-          lv_label_set_text(g_lbl_vitals_note,
-                            "MAX30102: not detected on /dev/i2c1");
-          return;
-        }
-
-      g_max_open = true;
-      lv_label_set_text_fmt(g_lbl_vitals_note,
-                            "MAX30102 part 0x%02x rev 0x%02x", g_max.part_id,
-                            g_max.rev_id);
-    }
-
-  if (hs_max30102_read_sample(&g_max, &sample) < 0)
-    {
-      /* The module is present but the FIFO has no sample yet (or the wiring
-       * needs attention).  Keep the last value and report the state.
-       */
-
-      if (!g_vitals_valid)
-        {
-          lv_label_set_text(g_lbl_vitals_note,
-                            "MAX30102: waiting for FIFO samples");
-        }
-
-      return;
-    }
-
-  /* The MAX30102 light level is not a calibrated heart rate yet; map the IR
-   * channel to a placeholder reading so the framework path can be validated
-   * before the PPG algorithm lands.
+  /* The labels are only there to mirror the pipeline state; the numbers
+   * themselves are computed by ma_ppg_thread().
    */
 
-  g_vitals_valid = true;
-
-  if (sample.ir > 0)
-    {
-      g_hr_bpm = 60 + (sample.ir % 60);
-      g_spo2   = 95 + (sample.red % 4);
-    }
-
-  g_ble_hr = (uint8_t)g_hr_bpm;
-  g_ble_spo2 = (uint8_t)g_spo2;
-  g_ble_vitals_ok = 1;
-
-  /* Same reasoning as the GSR path: skip the reallocating label updates
-   * while the sample does not actually move. */
-
-  if (g_hr_bpm == last_hr && g_spo2 == last_spo2 &&
-      sample.red == last_red && sample.ir == last_ir)
+  if (state == last_state && hr == last_hr && spo2 == last_spo2 &&
+      quality == last_quality)
     {
       return;
     }
 
-  last_hr   = g_hr_bpm;
-  last_spo2 = g_spo2;
-  last_red  = sample.red;
-  last_ir   = sample.ir;
+  last_state   = state;
+  last_hr      = hr;
+  last_spo2    = spo2;
+  last_quality = quality;
 
-  lv_label_set_text_fmt(g_lbl_hr, "%" PRIu32 " bpm", g_hr_bpm);
-  lv_label_set_text_fmt(g_lbl_spo2, "%" PRIu32 " %%", g_spo2);
-  lv_label_set_text_fmt(g_lbl_vitals_note, "RED %" PRIu32 "  IR %" PRIu32,
-                        sample.red, sample.ir);
+  if (state == MA_PPG_ABSENT)
+    {
+      lv_label_set_text(g_lbl_hr, "-- bpm");
+      lv_label_set_text(g_lbl_spo2, "-- %");
+      lv_label_set_text(g_lbl_vitals_note,
+                        "MAX30102: not detected on /dev/i2c1");
+      return;
+    }
+
+  g_hr_bpm = (uint32_t)hr;
+  g_spo2   = (uint32_t)spo2;
+  g_vitals_valid = (state == MA_PPG_OK);
+
+  if (state != MA_PPG_OK)
+    {
+      lv_label_set_text(g_lbl_hr, "-- bpm");
+      lv_label_set_text(g_lbl_spo2, "-- %");
+      lv_label_set_text(g_lbl_vitals_note,
+                        "Place a finger on the sensor");
+      return;
+    }
+
+  lv_label_set_text_fmt(g_lbl_hr, "%d bpm", hr);
+  lv_label_set_text_fmt(g_lbl_spo2, "%d %%", spo2);
+  lv_label_set_text_fmt(g_lbl_vitals_note, "pulse signal %d %%", quality);
 }
 
 /****************************************************************************
@@ -767,6 +765,154 @@ static void ma_refresh_timer(lv_timer_t *timer)
     {
       ma_read_motion();
     }
+}
+
+/****************************************************************************
+ * Name: ma_ppg_thread
+ *
+ * Description:
+ *   Drain the MAX30102 FIFO and run the PPG analysis.  The sensor produces
+ *   100 samples per second, so the loop polls it every few milliseconds and
+ *   pushes every sample it finds into the tracker; the results are published
+ *   at a much lower rate, which is all a label or a BLE notification needs.
+ *
+ ****************************************************************************/
+
+static FAR void *ma_ppg_thread(FAR void *arg)
+{
+  struct hs_max30102_sample_s sample;
+  uint32_t published = 0;
+
+  (void)arg;
+
+  while (g_ppg_run)
+    {
+      int drained = 0;
+      int ret;
+
+      if (!g_max_open)
+        {
+          if (hs_max30102_open(&g_max, HS_MAX30102_I2C_BUS) < 0)
+            {
+              g_ppg_state = MA_PPG_ABSENT;
+              sleep(5);
+              continue;
+            }
+
+          g_max_open  = true;
+          g_ppg_state = MA_PPG_WAITING;
+          hs_ppg_reset(&g_ppg);
+          published   = 0;
+        }
+
+      /* Take everything the FIFO has to offer, but never more than a few
+       * samples per pass so a burst cannot lock the thread up.
+       */
+
+      while (g_ppg_run && drained < 4)
+        {
+          ret = hs_max30102_read_sample(&g_max, &sample);
+
+          if (ret == -EAGAIN)
+            {
+              break;                    /* FIFO empty: the normal idle case */
+            }
+
+          if (ret < 0)
+            {
+              /* I2C trouble: drop the handle and rebuild it from scratch
+               * rather than spinning on a dead bus.
+               */
+
+              hs_max30102_close(&g_max);
+              g_max_open  = false;
+              g_ppg_state = MA_PPG_ABSENT;
+              break;
+            }
+
+          hs_ppg_push(&g_ppg, sample.timestamp_ms, sample.red, sample.ir);
+          drained++;
+        }
+
+      /* Publish about twice per second: the UI timer runs at 2 Hz, so a
+       * faster rate would only churn the labels.
+       */
+
+      if (g_ppg.samples - published >= HS_PPG_SAMPLE_HZ / 2)
+        {
+          int hr = hs_ppg_heart_rate(&g_ppg);
+
+          published = g_ppg.samples;
+
+          if (hr > 0)
+            {
+              g_ppg_hr      = hr;
+              g_ppg_spo2    = hs_ppg_spo2(&g_ppg);
+              g_ppg_quality = hs_ppg_quality(&g_ppg);
+              g_ppg_state   = MA_PPG_OK;
+
+              /* Feed the BLE characteristics from here so a phone keeps
+               * receiving vitals while the VITALS page is not shown.
+               */
+
+              g_ble_hr        = (uint8_t)hr;
+              g_ble_spo2      = (uint8_t)g_ppg_spo2;
+              g_ble_vitals_ok = 1;
+            }
+          else if (g_ppg.samples > HS_PPG_SAMPLE_HZ * 3)
+            {
+              /* Long enough for a finger to be placed: report "no signal"
+               * instead of holding on to a stale reading.
+               */
+
+              g_ppg_hr        = 0;
+              g_ppg_spo2      = 0;
+              g_ppg_quality   = 0;
+              g_ppg_state     = MA_PPG_WAITING;
+              g_ble_vitals_ok = 0;
+            }
+        }
+
+      usleep(5000);
+    }
+
+  if (g_max_open)
+    {
+      hs_max30102_close(&g_max);
+      g_max_open = false;
+    }
+
+  return NULL;
+}
+
+/****************************************************************************
+ * Name: ma_ppg_start
+ *
+ * Description:
+ *   Spawn the PPG worker.  It runs at the default priority on purpose: the
+ *   sensor polling is light and must never starve the render thread.
+ *
+ ****************************************************************************/
+
+static void ma_ppg_start(void)
+{
+  pthread_attr_t attr;
+
+  g_ppg_run = true;
+
+  if (pthread_attr_init(&attr) != 0)
+    {
+      return;
+    }
+
+  pthread_attr_setstacksize(&attr, 4096);
+
+  if (pthread_create(&g_ppg_thread, &attr, ma_ppg_thread, NULL) == 0)
+    {
+      pthread_detach(g_ppg_thread);
+    }
+
+  pthread_attr_destroy(&attr);
 }
 
 /****************************************************************************
@@ -1118,6 +1264,13 @@ int main(int argc, FAR char *argv[])
 
   lv_timer_create(ma_refresh_timer, MA_REFRESH_MS, NULL);
   ma_refresh_timer(NULL);
+
+  /* Start the PPG pipeline first: the beat detector needs a few seconds of
+   * samples before it can report anything, and the panel should already be
+   * drawing by then.
+   */
+
+  ma_ppg_start();
 
   /* Bring the Bluetooth peripheral up automatically so the watch is
    * discoverable right after power-up: the LINK page switch then only acts

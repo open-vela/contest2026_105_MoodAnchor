@@ -254,7 +254,14 @@ int hs_max30102_open(struct hs_max30102_s *sensor, unsigned int busno)
   if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x04, 0x00);
   if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x05, 0x00);
   if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x06, 0x00);
-  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x08, 0x0f);
+
+  /* Register 0x08 is FIFO_CONFIG: no sample averaging, FIFO rollover
+   * enabled, almost-full threshold at 15.  Rollover matters because the
+   * application drains the FIFO from a thread that can be delayed: without
+   * it a full FIFO simply stops producing samples.
+   */
+
+  if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x08, 0x1f);
   if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x09, 0x03);
   if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x0a, 0x27);
   if (ret >= 0) ret = hs_max30102_reg_write(sensor, 0x0c, 0x24);
