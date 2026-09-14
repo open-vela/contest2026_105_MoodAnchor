@@ -25,7 +25,7 @@ extern "C"
 #define HS_I2C_DEFAULT_FREQUENCY 400000u
 #define HS_ADC_DEVICE            "/dev/adc0"
 #define HS_ADC_GSR_DEVICE        "/dev/adc1"
-#define HS_ADC_VBAT_CHANNEL      5
+#define HS_ADC_VBAT_CHANNEL      7  /* GPADC1 channel 7 = battery (doc calls it CH8) */
 #define HS_ADC_GSR_CHANNEL       0
 #define HS_BUTTONS_DEVICE        "/dev/buttons"
 #define HS_VIBRATION_DEVICE      "/dev/gpio3" /* PA20, 30P-24 VIB PWM */

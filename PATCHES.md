@@ -65,6 +65,27 @@ HAL_Delay_us(10 * 1000);      /* 20 次 × 10 ms = 单次调用阻塞约 200 ms 
 > `vol10=1758 / vol25=3162 / low_mv=1000 / high_mv=2500`，即
 > `ratio=1068 / offset=822`。这是 vendor 的既有取舍，未改动。
 
+### 5. `vendor/sifli/chips/sf32lb52/sf32lb_adc.h` — VBAT 通道号错误
+
+```c
+/* 原值 */
+#define ADC_CHAN_VBAT          ADC_CHAN_5      /* 读到的是系统供电 3.3 V */
+/* 修正 */
+#define ADC_CHAN_VBAT          ADC_CHAN_7      /* 真正的电池电压输入 */
+```
+
+**根因是命名差一**：SiFli 文档对 GPADC1 输入用 **1-based 编号**（`sf32lb_adc.h`
+里给 PA28 的注释已经点明了这个坑 —— 文档的 "ADC CH1" 对应代码的 channel 0）。
+文档所说的电池输入 **"CH8" 即 channel 7**，而原代码写成了 channel 5，
+于是读到了 VSYS/LDO 的 3.3 V，与电池电量无关。
+
+配套改动：
+
+- `vendor/sifli/boards/.../src/sifli_ap.c` 通过 `sf32lb_adc_init("/dev/adc0")`
+  自动跟随新的 `ADC_CHAN_VBAT`，无需单独修改
+- `app/huangshan_hal/huangshan_hal.h`：`HS_ADC_VBAT_CHANNEL` 由 `5` 改为 `7`
+  （`hs_adc_read()` 要按通道号匹配返回样本里的 `am_channel`）
+
 ## 可选改动
 
 ### 2. `vendor/sifli/boards/sf32lb52/lckfb_huangshan_pi/configs/nsh/defconfig`
