@@ -38,14 +38,25 @@ d38a0001-1234-5678-9abc-def012345678
 |---|---|---|---|
 | **Event** | `d38a0002-…` | Notify | 11 字节事件包（跌倒/SOS 等离散事件） |
 | **Control** | `d38a0003-…` | Write | 手机下行命令，1–16 字节 |
-| **Data** | `d38a0004-…` | Notify | 17 字节：传感器样本 + 融合后的情绪判定 |
+| **Data** | `d38a0004-…` | Notify | 16 字节，**约 1 Hz** 周期推送 |
+| **Status** | `d38a0005-…` | Notify | 16 字节，**仅电量变化时**推送 |
 
-只有一个周期推送的特征：**原始值和结论在同一包里**。末字节是结论
-（是否激动 + 置信度），前 16 字节是得出它的那三路信号。
+Data 是主力：皮电 / 心率 / 血氧 / 电量 + 麦克风 / IMU / 情绪判定，全部塞在一包里。
+Status 只负责电量 —— 接收端的 Data 分支把 battery 写死为 `null`，
+电量只能从 Status 拿，所以它不能删。
 
-早期版本把结论单独放在 `d38a0005` 上，拆包拆出了一个 12 字节的 Status
-包和第二个通知，实际用不上它的时间戳与三个 score，反而让每秒多走一趟
-发送路径，已合并。
+> ⚠️ **字段偏移是对接契约，不是自由选择。** Android 接收端
+> （`ubu_share/蓝牙接收端/WatchBleService.kt`）把它们写死在代码里：
+>
+> ```kotlin
+> // …0004
+> gsr = le16(value, 0); hr = value[2]; spo2 = value[3]; flags = value[4]
+> // …0005
+> flags = value[1]; gsr = le16(value, 2); hr = value[4]; spo2 = value[5];
+> battery = value[12]  // 需要 flags and 0x10
+> ```
+>
+> 改这几处之前先确认接收端会跟着改。
 
 另外还装了三个标准服务（可直接用系统 API 读，也可以忽略）：
 
@@ -88,47 +99,75 @@ event type 取值：
 | `0x06` | 电量低 |
 | `0xff` | 自检 / 台架测试 |
 
-### 3.2 Data（`…0004`，17 字节）—— 传感器样本 + 情绪判定
+### 3.2 Data（`…0004`，16 字节）
 
-实时传感器样本，**约 1 Hz** 推送。这是"简洁发一下"的那包：四个传感器的当前值
-各占几个字节，不含任何统计量，末字节是融合结论。
+实时传感器样本 + 情绪判定，**约 1 Hz** 推送。
+
+**前 5 字节的排列由接收端决定**（见 §2 的警告）：皮电在最前、flags 在第 4
+字节。接收端不看的东西全部放在第 4 字节之后，所以只读到 flags 的实现
+不受影响。
 
 | 偏移 | 长度 | 字段 | 说明 |
 |---|---|---|---|
-| 0 | 1 | version | 固定 `0x01` |
-| 1 | 1 | flags | 见下 |
-| 2 | 2 | GSR | 皮肤电，毫伏（uint16 LE） |
-| 4 | 1 | mic level | 麦克风音量，0–100（**相对值**） |
-| 5 | 1 | battery | 电量百分比；`0xff` = 未知 |
-| 6 | 1 | heart rate | bpm，`0` = 无效 |
-| 7 | 1 | SpO2 | 百分比，`0` = 无效 |
-| 8 | 2 | accel X | 毫克（int16 **有符号** LE） |
-| 10 | 2 | accel Y | 毫克（int16 LE） |
-| 12 | 2 | accel Z | 毫克（int16 LE） |
-| 14 | 2 | gyro | 角速度**幅值**，0.1°/s（uint16 LE） |
-| 16 | 1 | **mood** | bit7 = 激动，bit0–6 = 置信度 0–100 |
+| 0 | 2 | GSR | 皮肤电，毫伏（uint16 LE） |
+| 2 | 1 | heart rate | bpm，`0` = 无效 |
+| 3 | 1 | SpO2 | 百分比，`0` = 无效 |
+| 4 | 1 | flags | 见下 |
+| 5 | 1 | mic level | 麦克风音量，0–100（**相对值**） |
+| 6 | 1 | battery | 电量百分比；`0xff` = 未知 |
+| 7 | 2 | accel X | 毫克（int16 **有符号** LE） |
+| 9 | 2 | accel Y | 毫克（int16 LE） |
+| 11 | 2 | accel Z | 毫克（int16 LE） |
+| 13 | 2 | gyro | 角速度**幅值**，0.1°/s（uint16 LE） |
+| 15 | 1 | **mood** | bit7 = 激动，bit0–6 = 置信度 0–100 |
 
 flags 位定义：
 
 | 位 | 值 | 含义 |
 |---|---|---|
 | 0 | `0x01` | GSR 有效 |
-| 1 | `0x02` | 麦克风有效 |
-| 2 | `0x04` | 电量有效 |
-| 3 | `0x08` | 心率有效 |
-| 4 | `0x10` | 血氧有效 |
+| 1 | `0x02` | 心率有效 |
+| 2 | `0x04` | 血氧有效 |
+| 3 | `0x08` | 麦克风有效 |
+| 4 | `0x10` | 电量有效 |
 | 5 | `0x20` | IMU 有效 |
 | 6 | `0x40` | 皮电就绪（已佩戴且已采基线） |
 
-末字节把结论和它依据的原始值放在同一个包、同一个时刻：`bit7` 单独就能
-回答"激不激动"，不看低位的置信度也能用。
+**这一包没有版本字节** —— 接收端把 `value[0]` 当作皮电的低半字节读，
+前面插任何东西都会把它弄乱。以后加字段一律加在尾部。
+
+末字节把结论和它依据的原始值放在同一个时刻：`bit7` 单独就能回答
+"激不激动"，不看低位的置信度也能用。
 
 > **无效的字段会被填写为 0**，所以不看 flags 会把"没有数据"当成真实的 0。
 > 麦克风的 0–100 是**相对刻度**（详见 §3.5），不是声压级。
 
-### 3.3 融合后的"激动"是怎么判出来的
+### 3.3 Status（`…0005`，16 字节）—— 电量
 
-结论就在 Data 包的第 16 字节，不需要额外特征。判定细节见 §3.5。
+**只在内容变化时才发**，另在手机刚订阅后补发一次。活值已经在 Data 里了，
+每秒重复一遍纯属浪费。
+
+| 偏移 | 长度 | 字段 | 说明 |
+|---|---|---|---|
+| 0 | 1 | version | 固定 `0x01` |
+| 1 | 1 | flags | 见下 |
+| 2 | 2 | GSR | 毫伏（uint16 LE） |
+| 4 | 1 | heart rate | bpm |
+| 5 | 1 | SpO2 | 百分比 |
+| 6–11 | 6 | reserved | 固定 `0` |
+| 12 | 1 | **battery** | 电量百分比；`0xff` = 未知 |
+| 13–15 | 3 | reserved | 固定 `0` |
+
+flags 位定义：
+
+| 位 | 值 | 含义 |
+|---|---|---|
+| 0 | `0x01` | GSR 有效 |
+| 1 | `0x02` | 心率有效 |
+| 2 | `0x04` | 血氧有效 |
+| 4 | `0x10` | 电量有效（**位 3 跳过，与接收端一致**） |
+
+注意位 3 是空的：接收端写的是 `flags and 0x10`，对齐它比补齐位序重要。
 
 ### 3.4 Control（`…0003`，手机 → 手表）
 
@@ -188,11 +227,12 @@ IMU 和麦克风的分各做一次**漏积分平滑**（时间常数约 3 秒 / 
 3. device.connectGatt()                    连接
 4. gatt.discoverServices()                 服务发现
 5. getService(d38a0001-...)                取自定义服务
-6. 对 0004 一个特征：
+6. 对 0004 / 0005 两个特征：
      gatt.setCharacteristicNotification(ch, true)
      再往 CCCD (00002902-0000-1000-8000-00805f9b34fb) 写
      ENABLE_NOTIFICATION_VALUE = {0x01, 0x00}
 7. onCharacteristicChanged 里解析
+8. 收到 Event 且 flags 的 bit0 置位时，往 Control 写 `0x01` 回 ACK
 ```
 
 **第 6 步两个动作都要做**，缺一个都不会收到通知：`setCharacteristicNotification()`
@@ -203,6 +243,7 @@ IMU 和麦克风的分各做一次**漏积分平滑**（时间常数约 3 秒 / 
 ```kotlin
 val SVC = UUID.fromString("d38a0001-1234-5678-9abc-def012345678")
 val CH_DATA   = UUID.fromString("d38a0004-1234-5678-9abc-def012345678")
+val CH_STATUS = UUID.fromString("d38a0005-1234-5678-9abc-def012345678")
 val CCCD = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
 private fun le16(b: ByteArray, o: Int) =
@@ -218,29 +259,38 @@ override fun onCharacteristicChanged(
 ) {
     when (ch.uuid) {
 
+        // 主力：传感器 + 情绪判定，约 1 Hz
         CH_DATA -> {
-            if (value.size < 17 || value[0] != 0x01.toByte()) return
-            val f = value[1].toInt() and 0xFF
+            if (value.size < 16) return
+            val f = value[4].toInt() and 0xFF
 
-            val gsr      = if (f and 0x01 != 0) le16(value, 2) else null
-            val micLevel = if (f and 0x02 != 0) value[4].toInt() and 0xFF else null
-            val battery  = if (f and 0x04 != 0) value[5].toInt() and 0xFF else null
-            val hr       = if (f and 0x08 != 0) value[6].toInt() and 0xFF else null
-            val spo2     = if (f and 0x10 != 0) value[7].toInt() and 0xFF else null
+            val gsr      = if (f and 0x01 != 0) le16(value, 0) else null
+            val hr       = if (f and 0x02 != 0) value[2].toInt() and 0xFF else null
+            val spo2     = if (f and 0x04 != 0) value[3].toInt() and 0xFF else null
+            val micLevel = if (f and 0x08 != 0) value[5].toInt() and 0xFF else null
+            val battery  = if (f and 0x10 != 0) value[6].toInt() and 0xFF else null
+            val gsrReady = (f and 0x40) != 0
 
             if (f and 0x20 != 0) {
-                val ax = sle16(value, 8)
-                val ay = sle16(value, 10)
-                val az = sle16(value, 12)
-                val gyroDps = le16(value, 14) / 10.0   // 角速度幅值，单位 °/s
+                val ax = sle16(value, 7)
+                val ay = sle16(value, 9)
+                val az = sle16(value, 11)
+                val gyroDps = le16(value, 13) / 10.0   // 角速度幅值，单位 °/s
             }
 
             // 同一个包里的结论，直接拿去触发通知
-            val mood       = value[16].toInt() and 0xFF
+            val mood       = value[15].toInt() and 0xFF
             val agitated   = (mood and 0x80) != 0
             val confidence = mood and 0x7F
-            val gsrReady   = (f and 0x40) != 0
             // if (agitated) 触发“疑似情绪激动”通知
+        }
+
+        // 只带电量，仅在变化时到达
+        CH_STATUS -> {
+            if (value.size < 16 || value[0] != 0x01.toByte()) return
+            val f = value[1].toInt() and 0xFF
+            val battery = if (f and 0x10 != 0 && value[12] != 0xFF.toByte())
+                value[12].toInt() and 0xFF else null
         }
     }
 }
@@ -256,8 +306,8 @@ override fun onCharacteristicChanged(
 - **不要用系统蓝牙列表找设备**（原因见第 1 节），必须用 App 扫描。
 - **断连后手机会停止收到通知**，因为 CCCD 绑定在连接上；重连后需要**重新订阅**。
   手表侧会在断连后自动恢复广播，可以直接重连。
-- **Data 是约 1 Hz 的周期推送**，不是每个样本都推。想改频率可以写 Control
-  的 `0x03` 命令。
+- **Data 约 1 Hz 周期推送，Status 只在变化时推送**，都不是每样本一推。想改 Data 的
+  频率可以写 Control 的 `0x03` 命令。
 - **无效字段会被填成 0**，必须看 flags 再决定用不用。麦克风、皮电在没有数据时和
   真实的 0 长得一模一样。
 - **麦克风的 0–100 是相对刻度**，不是声压级。麦克风偏置、灵敏度、增益个体差异很大，
@@ -265,8 +315,9 @@ override fun onCharacteristicChanged(
 - **GSR 的"是否佩戴"是手表本地判定的**，蓝牙发的是原始毫伏值。判据是**电压高于
   1500 mV 表示未佩戴**（详见 `WIRING.md` §3.1）—— 手机若要自己显示佩戴状态，
   需要按同样的阈值判断，否则会和表端不一致。
-- **"激动"这个结论是手表算的**（规则见 §3.5），就在 Data 包的第 16 字节。
+- **"激动"这个结论是手表算的**（规则见 §3.5），就在 Data 包的第 15 字节。
   如果手机想用自己的模型复算，同一包里就有原始三路信号。
 - **Event 包是 fire-and-forget**：除非 flags 的 bit0 置位，否则不需要回 ACK。
-- **改协议要注意版本字节**：两个包的 byte 0 都是版本号，格式变了就改它，手机端可以
-  据此拒绝解析老固件发来的包。
+- **改协议要注意版本字节**：Event 与 Status 的 byte 0 都是版本号，Data 没有（接收端
+  把 value[0] 当作皮电低位）。格式变了改 Event/Status 的版本号，手机端可以据此
+  拒绝解析老固件发来的包。

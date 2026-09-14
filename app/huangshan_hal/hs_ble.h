@@ -59,49 +59,88 @@
 /* Live sensor sample plus the fused verdict, written to the data
  * characteristic (...0004):
  *
- *   byte 0    : version (0x01)
- *   byte 1    : flags (see HS_BLE_DATA_* below)
- *   byte 2-3  : skin conductance in mV   (uint16, little endian)
- *   byte 4    : microphone level, 0..100
- *   byte 5    : battery percent, 0xff = unknown
- *   byte 6    : heart rate in bpm        (uint8, 0 = invalid)
- *   byte 7    : SpO2 in %                (uint8, 0 = invalid)
- *   byte 8-9  : acceleration X in mg     (int16, little endian)
- *   byte 10-11: acceleration Y in mg     (int16, little endian)
- *   byte 12-13: acceleration Z in mg     (int16, little endian)
- *   byte 14-15: rotation magnitude, tenths of a degree/s (uint16, LE)
- *   byte 16   : fused mood, bit 7 = agitated, bits 0..6 = confidence 0..100
+ *   byte 0-1  : skin conductance in mV   (uint16, little endian)
+ *   byte 2    : heart rate in bpm        (uint8, 0 = invalid)
+ *   byte 3    : SpO2 in %                (uint8, 0 = invalid)
+ *   byte 4    : flags (see HS_BLE_DATA_* below)
+ *   byte 5    : microphone level, 0..100
+ *   byte 6    : battery percent, 0xff = unknown
+ *   byte 7-8  : acceleration X in mg     (int16, little endian)
+ *   byte 9-10 : acceleration Y in mg     (int16, little endian)
+ *   byte 11-12: acceleration Z in mg     (int16, little endian)
+ *   byte 13-14: rotation magnitude, tenths of a degree/s (uint16, LE)
+ *   byte 15   : fused mood, bit 7 = agitated, bits 0..6 = confidence 0..100
+ *
+ * The order of the first five bytes is not ours to choose.  The Android
+ * receiver reads this characteristic as
+ *
+ *     gsr = le16(value, 0); hr = value[2]; spo2 = value[3];
+ *     flags = value[4];
+ *
+ * so those offsets are the contract.  Everything the receiver does not look
+ * at - microphone, IMU, the verdict - goes after byte 4, where an
+ * implementation that stops reading at the flags byte is unaffected.
+ *
+ * There is deliberately no version byte here: the receiver does not expect
+ * one and reads value[0] as the low half of the GSR sample.  Adding fields
+ * means adding them at the end.
  *
  * The microphone level is a relative figure, not a sound pressure level: mic
  * bias, sensitivity and gain all differ between units, so it is only
  * meaningful against its own recent history.
- *
- * The verdict rides at the end of the same packet rather than on a
- * characteristic of its own.  It is one byte, it is produced at the same
- * instant as the sample it is based on, and a phone that wants it is already
- * subscribed to this one.  Keeping it here halves the notification traffic:
- * one packet per second instead of two, and one less characteristic for the
- * stack to walk on every send.
  */
 
-#define HS_BLE_DATA_LEN          17
-#define HS_BLE_DATA_VERSION      0x01
+#define HS_BLE_DATA_LEN          16
 
 #define HS_BLE_DATA_GSR_VALID    0x01
-#define HS_BLE_DATA_MIC_VALID    0x02
-#define HS_BLE_DATA_BAT_VALID    0x04
-#define HS_BLE_DATA_HR_VALID     0x08
-#define HS_BLE_DATA_SPO2_VALID   0x10
+#define HS_BLE_DATA_HR_VALID     0x02
+#define HS_BLE_DATA_SPO2_VALID   0x04
+#define HS_BLE_DATA_MIC_VALID    0x08
+#define HS_BLE_DATA_BAT_VALID    0x10
 #define HS_BLE_DATA_IMU_VALID    0x20
 #define HS_BLE_DATA_GSR_READY    0x40    /* baseline held, electrodes on skin */
 
-/* Byte 16: the fusion verdict.  The confidence occupies the low bits so that
+/* Byte 15: the fusion verdict.  The confidence occupies the low bits so that
  * a client reading only bit 7 gets the answer and a client reading the whole
  * byte gets the answer and how sure the watch was.
  */
 
 #define HS_BLE_DATA_AGITATED     0x80
 #define HS_BLE_DATA_CONF_MASK    0x7f
+
+/****************************************************************************
+ * Device status (characteristic ...0005)
+ *
+ * Same fields as the data packet's first six bytes, minus the ones the data
+ * packet grew afterwards.  The receiver reads it as
+ *
+ *     version = value[0]; flags = value[1]; gsr = le16(value, 2);
+ *     hr = value[4]; spo2 = value[5]; battery = value[12];
+ *
+ * with the battery conditioned on flags & 0x10, so those offsets are fixed
+ * too.  Bytes 6..11 and 13..15 are reserved.
+ *
+ * It is only sent when the battery actually changes - the data packet already
+ * carries the live values, so a second identical stream every second would be
+ * pure overhead.
+ *
+ *   byte 0    : version (0x01)
+ *   byte 1    : flags (see HS_BLE_STATUS_* below)
+ *   byte 2-3  : skin conductance in mV   (uint16, little endian)
+ *   byte 4    : heart rate in bpm
+ *   byte 5    : SpO2 in %
+ *   byte 6-11 : reserved (0)
+ *   byte 12   : battery percent, 0xff = unknown
+ *   byte 13-15: reserved (0)
+ */
+
+#define HS_BLE_STATUS_LEN        16
+#define HS_BLE_STATUS_VERSION    0x01
+
+#define HS_BLE_STATUS_GSR_VALID  0x01
+#define HS_BLE_STATUS_HR_VALID   0x02
+#define HS_BLE_STATUS_SPO2_VALID 0x04
+#define HS_BLE_STATUS_BAT_VALID  0x10
 
 #define HS_BLE_STATUS_BAT_UNKNOWN 0xff
 
@@ -424,6 +463,36 @@ int hs_ble_data_notify(const struct hs_ble_sample_s *sample);
 const uint8_t *hs_ble_data_last(void);
 
 /****************************************************************************
+ * Name: hs_ble_status_notify
+ *
+ * Description:
+ *   Publish the device status packet (HS_BLE_STATUS_LEN bytes) on the status
+ *   characteristic.  It carries the battery level, which the data packet has
+ *   no room for in the layout the receiver expects.
+ *
+ *   Only sends when something in the packet actually differs from the last
+ *   one published, and always once after a new peer subscribes.  The live
+ *   values already travel on the data characteristic, so repeating them here
+ *   every second would be pure overhead.
+ *
+ * Input Parameters:
+ *   sample - same structure the data packet is built from
+ *
+ ****************************************************************************/
+
+int hs_ble_status_notify(const struct hs_ble_sample_s *sample);
+
+/****************************************************************************
+ * Name: hs_ble_status_last
+ *
+ * Description:
+ *   Return a pointer to the last status packet (HS_BLE_STATUS_LEN bytes).
+ *
+ ****************************************************************************/
+
+const uint8_t *hs_ble_status_last(void);
+
+/****************************************************************************
  * Name: hs_ble_adv_service
  *
  * Description:
@@ -464,7 +533,8 @@ void hs_ble_adv_service(void);
 #define HS_BLE_TRACE_CCC_SUB    5    /* peer wrote the CCC descriptor */
 #define HS_BLE_TRACE_CCC_UNSUB  6
 #define HS_BLE_TRACE_SEND_DATA  7    /* about to notify the data characteristic */
-#define HS_BLE_TRACE_SENT       9    /* the notification went out, loop complete */
+#define HS_BLE_TRACE_SEND_STAT  8    /* about to notify the status one */
+#define HS_BLE_TRACE_SENT       9    /* the burst went out, loop complete */
 
 void hs_ble_trace(int code);
 int  hs_ble_trace_last(void);

@@ -80,6 +80,10 @@ extern int bt_stop_advertising(void);
 #define HS_H_DATA_VAL           0x0017
 #define HS_H_DATA_CCC           0x0018
 
+#define HS_H_STATUS_CHRC        0x0019
+#define HS_H_STATUS_VAL         0x001a
+#define HS_H_STATUS_CCC         0x001b
+
 #define HS_H_DIS_SVC            0x0020
 #define HS_H_DIS_MANUF_CHRC     0x0021
 #define HS_H_DIS_MANUF_VAL      0x0022
@@ -212,11 +216,17 @@ static struct bt_uuid_s g_uuid_data =
   }
 };
 
-/* d38a0005-1234-5678-9abc-def012345678 was the separate "full device status"
- * characteristic.  Its one useful byte - the fused verdict - now travels as
- * the last byte of the data packet, so the characteristic and its UUID are
- * gone.
- */
+/* d38a0005-1234-5678-9abc-def012345678 (device status) */
+
+static struct bt_uuid_s g_uuid_status =
+{
+  .type = BT_UUID_128,
+  .u.u128 =
+  {
+    0x05, 0x00, 0x8a, 0xd3, 0x34, 0x12, 0x78, 0x56,
+    0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0xf0, 0xde
+  }
+};
 
 static struct bt_uuid_s g_uuid_dis =
 {
@@ -310,6 +320,13 @@ static struct bt_gatt_chrc_s g_chrc_data =
   .uuid         = &g_uuid_data,
 };
 
+static struct bt_gatt_chrc_s g_chrc_status =
+{
+  .properties   = BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+  .value_handle = HS_H_STATUS_VAL,
+  .uuid         = &g_uuid_status,
+};
+
 static struct bt_gatt_chrc_s g_chrc_dis_manuf =
 {
   .properties   = BT_GATT_CHRC_READ,
@@ -357,6 +374,7 @@ static struct bt_gatt_chrc_s g_chrc_bas_level =
 static struct bt_gatt_ccc_cfg_s g_ccc_sc[1];
 static struct bt_gatt_ccc_cfg_s g_ccc_event[1];
 static struct bt_gatt_ccc_cfg_s g_ccc_data[1];
+static struct bt_gatt_ccc_cfg_s g_ccc_status[1];
 static struct bt_gatt_ccc_cfg_s g_ccc_battery[1];
 
 /* Characteristic values --------------------------------------------------- */
@@ -368,6 +386,14 @@ static uint8_t  g_event_pkt[HS_BLE_EVENT_LEN];
 static uint16_t g_event_seq;
 
 static uint8_t  g_data_pkt[HS_BLE_DATA_LEN];
+static uint8_t  g_status_pkt[HS_BLE_STATUS_LEN];
+
+/* What the status characteristic last published.  The packet only goes out
+ * when it differs, so this is the comparison point.
+ */
+
+static uint8_t  g_status_sent[HS_BLE_STATUS_LEN];
+static volatile bool g_status_send;
 
 static uint8_t  g_ctrl[HS_BLE_CTRL_MAX];
 static size_t   g_ctrl_len;
@@ -455,6 +481,15 @@ static void hs_ble_ccc_cfg_changed(uint16_t value)
   hs_ble_trace(g_peer_connected ? HS_BLE_TRACE_CCC_SUB
                                 : HS_BLE_TRACE_CCC_UNSUB);
 
+  if (g_peer_connected)
+    {
+      /* A new subscriber has seen nothing yet, so the next status tick has
+       * to send even if nothing changed since the last peer went away.
+       */
+
+      g_status_send = true;
+    }
+
   if (was && value == 0)
     {
       /* Do NOT call hs_ble_adv_apply() here: this callback runs in the
@@ -515,6 +550,14 @@ static int hs_ble_read_data(FAR struct bt_conn_s *conn,
 {
   return bt_gatt_attr_read(conn, attr, buf, len, offset, g_data_pkt,
                            sizeof(g_data_pkt));
+}
+
+static int hs_ble_read_status(FAR struct bt_conn_s *conn,
+                              FAR const struct bt_gatt_attr_s *attr,
+                              FAR void *buf, uint8_t len, uint16_t offset)
+{
+  return bt_gatt_attr_read(conn, attr, buf, len, offset, g_status_pkt,
+                           sizeof(g_status_pkt));
 }
 
 static int hs_ble_read_string(FAR struct bt_conn_s *conn,
@@ -648,6 +691,16 @@ static const struct bt_gatt_attr_s g_attrs[] =
   BT_GATT_DESCRIPTOR(HS_H_DATA_VAL, &g_uuid_data, BT_GATT_PERM_READ,
                      hs_ble_read_data, NULL, NULL),
   BT_GATT_CCC(HS_H_DATA_CCC, HS_H_DATA_VAL, g_ccc_data,
+              hs_ble_ccc_cfg_changed),
+  BT_GATT_CHARACTERISTIC(HS_H_STATUS_CHRC, &g_chrc_status),
+  BT_GATT_DESCRIPTOR(HS_H_STATUS_VAL, &g_uuid_status, BT_GATT_PERM_READ,
+                     hs_ble_read_status, NULL, NULL),
+  BT_GATT_CCC(HS_H_STATUS_CCC, HS_H_STATUS_VAL, g_ccc_status,
+              hs_ble_ccc_cfg_changed),
+  BT_GATT_CHARACTERISTIC(HS_H_STATUS_CHRC, &g_chrc_status),
+  BT_GATT_DESCRIPTOR(HS_H_STATUS_VAL, &g_uuid_status, BT_GATT_PERM_READ,
+                     hs_ble_read_status, NULL, NULL),
+  BT_GATT_CCC(HS_H_STATUS_CCC, HS_H_STATUS_VAL, g_ccc_status,
               hs_ble_ccc_cfg_changed),
 
   /* Device Information Service */
@@ -1056,15 +1109,19 @@ int hs_ble_data_notify(const struct hs_ble_sample_s *sample)
       flags |= HS_BLE_DATA_GSR_READY;
     }
 
-  g_data_pkt[0]  = HS_BLE_DATA_VERSION;
-  g_data_pkt[1]  = flags;
-  g_data_pkt[2]  = sample->gsr_valid ? (uint8_t)(sample->gsr_mv & 0xff) : 0;
-  g_data_pkt[3]  = sample->gsr_valid ? (uint8_t)(sample->gsr_mv >> 8) : 0;
-  g_data_pkt[4]  = sample->mic_valid ? sample->mic_level : 0;
-  g_data_pkt[5]  = sample->bat_valid ? sample->battery
+  /* The first five bytes are the receiver's layout, not a free choice: it
+   * reads the GSR at offset 0 and the flags at offset 4.  Everything it does
+   * not look at goes after them.
+   */
+
+  g_data_pkt[0]  = sample->gsr_valid ? (uint8_t)(sample->gsr_mv & 0xff) : 0;
+  g_data_pkt[1]  = sample->gsr_valid ? (uint8_t)(sample->gsr_mv >> 8) : 0;
+  g_data_pkt[2]  = sample->hr_valid ? sample->hr_bpm : 0;
+  g_data_pkt[3]  = sample->spo2_valid ? sample->spo2 : 0;
+  g_data_pkt[4]  = flags;
+  g_data_pkt[5]  = sample->mic_valid ? sample->mic_level : 0;
+  g_data_pkt[6]  = sample->bat_valid ? sample->battery
                                      : HS_BLE_STATUS_BAT_UNKNOWN;
-  g_data_pkt[6]  = sample->hr_valid ? sample->hr_bpm : 0;
-  g_data_pkt[7]  = sample->spo2_valid ? sample->spo2 : 0;
 
   if (sample->imu_valid)
     {
@@ -1074,16 +1131,16 @@ int hs_ble_data_notify(const struct hs_ble_sample_s *sample)
         {
           uint16_t raw = (uint16_t)sample->accel_mg[i];
 
-          g_data_pkt[8 + i * 2] = (uint8_t)(raw & 0xff);
-          g_data_pkt[9 + i * 2] = (uint8_t)(raw >> 8);
+          g_data_pkt[7 + i * 2] = (uint8_t)(raw & 0xff);
+          g_data_pkt[8 + i * 2] = (uint8_t)(raw >> 8);
         }
 
-      g_data_pkt[14] = (uint8_t)(sample->gyro_dps10 & 0xff);
-      g_data_pkt[15] = (uint8_t)(sample->gyro_dps10 >> 8);
+      g_data_pkt[13] = (uint8_t)(sample->gyro_dps10 & 0xff);
+      g_data_pkt[14] = (uint8_t)(sample->gyro_dps10 >> 8);
     }
   else
     {
-      memset(&g_data_pkt[8], 0, 8);
+      memset(&g_data_pkt[7], 0, 8);
     }
 
   /* The fused verdict, last byte of the same packet.  Confidence is clipped
@@ -1091,7 +1148,7 @@ int hs_ble_data_notify(const struct hs_ble_sample_s *sample)
    * that only cares about that does not have to know the scale.
    */
 
-  g_data_pkt[16] = (uint8_t)((sample->agitated ? HS_BLE_DATA_AGITATED : 0) |
+  g_data_pkt[15] = (uint8_t)((sample->agitated ? HS_BLE_DATA_AGITATED : 0) |
                              (sample->confidence & HS_BLE_DATA_CONF_MASK));
 
   /* Keep the standard Battery Service in step so a client can subscribe to
@@ -1124,6 +1181,83 @@ int hs_ble_data_notify(const struct hs_ble_sample_s *sample)
 const uint8_t *hs_ble_data_last(void)
 {
   return g_data_pkt;
+}
+
+int hs_ble_status_notify(const struct hs_ble_sample_s *sample)
+{
+  uint8_t flags = 0;
+
+  if (!g_gatt_installed)
+    {
+      return -ENOTCONN;
+    }
+
+  if (sample == NULL)
+    {
+      return -EINVAL;
+    }
+
+  if (sample->gsr_valid)
+    {
+      flags |= HS_BLE_STATUS_GSR_VALID;
+    }
+
+  if (sample->hr_valid)
+    {
+      flags |= HS_BLE_STATUS_HR_VALID;
+    }
+
+  if (sample->spo2_valid)
+    {
+      flags |= HS_BLE_STATUS_SPO2_VALID;
+    }
+
+  if (sample->bat_valid)
+    {
+      flags |= HS_BLE_STATUS_BAT_VALID;
+    }
+
+  /* Reserved bytes stay zero: the receiver ignores them, and leaving them
+   * untouched makes the comparison below meaningful.
+   */
+
+  memset(g_status_pkt, 0, sizeof(g_status_pkt));
+
+  g_status_pkt[0]  = HS_BLE_STATUS_VERSION;
+  g_status_pkt[1]  = flags;
+  g_status_pkt[2]  = sample->gsr_valid ? (uint8_t)(sample->gsr_mv & 0xff) : 0;
+  g_status_pkt[3]  = sample->gsr_valid ? (uint8_t)(sample->gsr_mv >> 8) : 0;
+  g_status_pkt[4]  = sample->hr_valid ? sample->hr_bpm : 0;
+  g_status_pkt[5]  = sample->spo2_valid ? sample->spo2 : 0;
+  g_status_pkt[12] = sample->bat_valid ? sample->battery
+                                       : HS_BLE_STATUS_BAT_UNKNOWN;
+
+  /* No peer, nothing to send.  Leave g_status_send alone so that the first
+   * tick after a phone subscribes still publishes even if nothing has
+   * changed in the meantime.
+   */
+
+  if (!g_peer_connected)
+    {
+      return OK;
+    }
+
+  if (!g_status_send &&
+      memcmp(g_status_pkt, g_status_sent, sizeof(g_status_pkt)) == 0)
+    {
+      return OK;
+    }
+
+  g_status_send = false;
+  memcpy(g_status_sent, g_status_pkt, sizeof(g_status_sent));
+
+  bt_gatt_notify(HS_H_STATUS_VAL, g_status_pkt, sizeof(g_status_pkt));
+  return OK;
+}
+
+const uint8_t *hs_ble_status_last(void)
+{
+  return g_status_pkt;
 }
 
 void hs_ble_adv_service(void)

@@ -2627,11 +2627,9 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
           (void)hs_buttons_read(&g_btn, &state);
         }
 
-      /* The verdict rides in the same packet as the sample it was derived
-       * from, so there is no second characteristic to publish.  The
-       * per-sensor scores stay on the watch - they are what the MOOD page
-       * and the confirmation prompt show, and putting them on the wire was
-       * the part the phone never used.
+      /* The verdict rides in the same data packet as the sample it was
+       * derived from.  The status characteristic is for the receiver's
+       * battery figure and only goes out when it changes.
        */
 
       sample.gsr_ready  = result.gsr_ready;
@@ -2640,6 +2638,10 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
 
       hs_ble_trace(HS_BLE_TRACE_SEND_DATA);
       hs_ble_data_notify(&sample);
+
+      hs_ble_trace(HS_BLE_TRACE_SEND_STAT);
+      hs_ble_status_notify(&sample);
+
       hs_ble_trace(HS_BLE_TRACE_SENT);
 
       /* The controller stops advertising as soon as a phone connects and
