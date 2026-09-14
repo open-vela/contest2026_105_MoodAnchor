@@ -1471,21 +1471,17 @@ int main(int argc, FAR char *argv[])
   lv_timer_create(ma_refresh_timer, MA_REFRESH_MS, NULL);
   ma_refresh_timer(NULL);
 
-  /* Start the PPG pipeline first: the beat detector needs a few seconds of
-   * samples before it can report anything, and the panel should already be
-   * drawing by then.
+  /* Start the PPG pipeline: the beat detector needs a few seconds of samples
+   * before it can report anything, and the panel should already be drawing
+   * by then.
    */
 
   ma_ppg_start();
 
-  /* Bring the Bluetooth peripheral up automatically so the watch is
-   * discoverable right after power-up: the LINK page switch then only acts
-   * as a manual off/on control.  This also keeps the device usable when the
-   * panel is not lit (the phone can still connect and read the status
-   * characteristic).
+  /* Bluetooth stays off until the LINK page switch is touched.  Bringing the
+   * host stack up costs a burst of synchronous HCI traffic, and starting it
+   * unprompted only competes with the first frames the panel draws.
    */
-
-  ma_ble_start_async();
 
   printf("MoodAnchor UI running (swipe for VITALS / MOTION / LINK)\n");
 
