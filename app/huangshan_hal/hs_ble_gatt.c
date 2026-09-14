@@ -434,6 +434,20 @@ static volatile bool g_peer_connected;
 
 static volatile bool g_adv_restart;
 
+/* TEMPORARY: see hs_ble_trace() in hs_ble.h. */
+
+static volatile int g_ble_trace;
+
+void hs_ble_trace(int code)
+{
+  g_ble_trace = code;
+}
+
+int hs_ble_trace_last(void)
+{
+  return g_ble_trace;
+}
+
 bool hs_ble_gatt_peer_connected(void)
 {
   return g_peer_connected;
@@ -450,6 +464,17 @@ static void hs_ble_ccc_cfg_changed(uint16_t value)
   bool was = g_peer_connected;
 
   g_peer_connected = (value != 0);
+
+  /* TEMPORARY: the connect path had no logging at all, which is why a hang
+   * here looked like the device simply going silent.  Remove once the
+   * freeze is fixed.
+   */
+
+  printf("[BLE] ccc value=0x%04x peer=%d\n", (unsigned)value,
+         (int)g_peer_connected);
+
+  hs_ble_trace(g_peer_connected ? HS_BLE_TRACE_CCC_SUB
+                                : HS_BLE_TRACE_CCC_UNSUB);
 
   if (was && value == 0)
     {

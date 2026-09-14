@@ -35,6 +35,41 @@ static int g_mic_smooth;
 
 static int g_hold;
 
+/* Live tuning values.  Filled in on first use from the defaults in the
+ * header, then edited in place by the settings page.  Plain ints written by
+ * one thread and read by another are fine here: the fields are aligned, the
+ * values are tiny, and an edit landing a millisecond later than it otherwise
+ * would is not something anyone can perceive.
+ */
+
+static struct hs_mood_tuning_s g_tuning;
+static bool                    g_tuning_ready;
+
+/****************************************************************************
+ * Public Functions
+ ****************************************************************************/
+
+struct hs_mood_tuning_s *hs_mood_tuning(void)
+{
+  if (!g_tuning_ready)
+    {
+      hs_mood_reset_tuning();
+    }
+
+  return &g_tuning;
+}
+
+void hs_mood_reset_tuning(void)
+{
+  g_tuning.imu_full        = HS_MOOD_DEF_IMU_FULL;
+  g_tuning.mic_floor       = HS_MOOD_DEF_MIC_FLOOR;
+  g_tuning.mic_full        = HS_MOOD_DEF_MIC_FULL;
+  g_tuning.fused_threshold = HS_MOOD_DEF_FUSED_THRESHOLD;
+  g_tuning.min_agreeing    = HS_MOOD_DEF_MIN_AGREEING;
+
+  g_tuning_ready = true;
+}
+
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
@@ -125,7 +160,7 @@ static int mood_imu_score(const struct hs_mood_input_s *in, int *gyro_mag)
 
   activity = deviation + rotation;
 
-  return mood_clamp100((int)(activity * 100 / HS_MOOD_IMU_FULL));
+  return mood_clamp100((int)(activity * 100 / g_tuning.imu_full));
 }
 
 /****************************************************************************
@@ -140,13 +175,13 @@ static int mood_imu_score(const struct hs_mood_input_s *in, int *gyro_mag)
 
 static int mood_mic_score(const struct hs_mood_input_s *in)
 {
-  if (in->mic_level <= HS_MOOD_MIC_FLOOR)
+  if (in->mic_level <= g_tuning.mic_floor)
     {
       return 0;
     }
 
-  return mood_clamp100((in->mic_level - HS_MOOD_MIC_FLOOR) * 100 /
-                       (HS_MOOD_MIC_FULL - HS_MOOD_MIC_FLOOR));
+  return mood_clamp100((in->mic_level - g_tuning.mic_floor) * 100 /
+                       (g_tuning.mic_full - g_tuning.mic_floor));
 }
 
 /****************************************************************************
@@ -197,6 +232,7 @@ void hs_mood_update(const struct hs_mood_input_s *in,
   int instant;
   int fused;
   int agreeing;
+  int weight;
 
   if (in == NULL || out == NULL)
     {
@@ -229,8 +265,16 @@ void hs_mood_update(const struct hs_mood_input_s *in,
 
   out->agreeing = agreeing;
 
-  fused = (out->gsr_score * HS_MOOD_W_GSR + out->imu_score * HS_MOOD_W_IMU +
-           out->mic_score * HS_MOOD_W_MIC) / 100;
+  /* Only the sensors that can actually contribute get a say.  See the note
+   * on the weights in hs_mood.h.
+   */
+
+  weight = HS_MOOD_W_IMU + HS_MOOD_W_MIC +
+           (in->gsr_ready ? HS_MOOD_W_GSR : 0);
+
+  fused = (out->imu_score * HS_MOOD_W_IMU +
+           out->mic_score * HS_MOOD_W_MIC +
+           (in->gsr_ready ? out->gsr_score * HS_MOOD_W_GSR : 0)) / weight;
 
   out->confidence = fused;
 
@@ -240,7 +284,8 @@ void hs_mood_update(const struct hs_mood_input_s *in,
    * it is the whole point of fusing.
    */
 
-  if (fused >= HS_MOOD_FUSED_THRESHOLD && agreeing >= HS_MOOD_MIN_AGREEING)
+  if (fused >= g_tuning.fused_threshold &&
+      agreeing >= g_tuning.min_agreeing)
     {
       g_hold = HS_MOOD_HOLD_UPDATES;
     }

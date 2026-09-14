@@ -68,7 +68,8 @@
 #define MA_PAGE_PPG        3
 #define MA_PAGE_IMU        4
 #define MA_PAGE_MIC        5
-#define MA_PAGE_COUNT      6
+#define MA_PAGE_TUNE       6
+#define MA_PAGE_COUNT      7
 
 #define MA_REFRESH_MS      500
 
@@ -148,6 +149,13 @@ static lv_obj_t *g_lbl_gsr_mv;
 static lv_obj_t *g_lbl_gsr_rest;
 static lv_obj_t *g_lbl_gsr_band;
 
+/* The three per-sensor scores behind the fusion verdict.  Without them the
+ * only way to tell why no confirmation prompt appeared is to guess, and the
+ * scores are exactly what says which sensor is holding it back.
+ */
+
+static lv_obj_t *g_lbl_fusion;
+
 /* System page (battery + sensor inventory) */
 
 static lv_obj_t *g_lbl_batt_mv;
@@ -190,6 +198,28 @@ static lv_obj_t *g_lbl_temp;
 static lv_obj_t *g_sw_ble;
 static lv_obj_t *g_lbl_ble_state;
 static lv_obj_t *g_lbl_ble_info;
+
+/* TEMPORARY: the last BLE step, shown on the LINK page so a freeze leaves a
+ * readable trace on screen when the console cannot be reached. */
+
+static lv_obj_t *g_lbl_ble_trace;
+
+/* Arousal confirmation.
+ *
+ * The fusion runs on its own thread and publishes its verdict here; the UI
+ * thread turns a fresh "agitated" into a dialog asking the wearer whether the
+ * call was right.  Keeping the two counters apart is the whole point of
+ * asking: a confirmed event and a false alarm are exactly the labels needed
+ * to tune the thresholds in hs_mood.h later.
+ */
+
+static pthread_mutex_t        g_mood_lock = PTHREAD_MUTEX_INITIALIZER;
+static struct hs_mood_result_s g_mood_result;
+static volatile bool          g_mood_ask;         /* prompt requested */
+static volatile int           g_mood_confirmed;
+static volatile int           g_mood_false;
+static lv_obj_t              *g_mood_box;         /* open dialog, or NULL */
+static pthread_t              g_mood_thread;
 
 /* Sensor state */
 
@@ -252,6 +282,22 @@ static pthread_t        g_sys_thread;
 static pthread_t        g_mic_thread;
 static pthread_t        g_gsr_thread;
 
+/* TEMPORARY BRING-UP INSTRUMENTATION.
+ *
+ * The Bluetooth link freezes the system on connect and the serial console
+ * cannot be relied on to capture it, so the worker threads tick these
+ * counters and the BLE data thread prints them once a second.  When the
+ * freeze happens the last heartbeat says which threads were still running,
+ * which separates "the whole system hung" from "only the render thread hung".
+ *
+ * Remove once the freeze is fixed.
+ */
+
+static volatile uint32_t g_tick_sys;
+static volatile uint32_t g_tick_imu;
+static volatile uint32_t g_tick_gsr;
+static volatile uint32_t g_hb_seq;
+
 /* Latest samples */
 
 /* Latest GSR reading and the classification parameters.
@@ -293,13 +339,14 @@ static pthread_t   g_ble_thread;
 
 static volatile int g_ble_state = MA_BLE_OFF;
 static pthread_t    g_ble_start_thread;
-
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
 
 static void ma_ble_start_async(void);
 static void ma_ble_stop(void);
+
+static void ma_mood_prompt(void);
 
 static void ma_gsr_cal_event(lv_event_t *event);
 static void ma_gsr_band_event(lv_event_t *event);
@@ -483,6 +530,17 @@ static void ma_build_mood_page(lv_obj_t *tile)
   ma_create_caption(card, "State");
   g_lbl_mood_value = ma_create_value(card, "--", &lv_font_montserrat_48,
                                      MA_COLOR_ACCENT);
+
+  /* The fusion evidence, tucked into the free corner of the same card so the
+   * layout does not have to move.
+   */
+
+  g_lbl_fusion = lv_label_create(card);
+  lv_obj_set_style_text_color(g_lbl_fusion, lv_color_hex(MA_COLOR_MUTED), 0);
+  lv_obj_set_style_text_font(g_lbl_fusion, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_align(g_lbl_fusion, LV_TEXT_ALIGN_RIGHT, 0);
+  lv_obj_align(g_lbl_fusion, LV_ALIGN_TOP_RIGHT, 0, 0);
+  lv_label_set_text(g_lbl_fusion, "");
 
   card = ma_create_card(tile, 120);
   lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 196);
@@ -691,6 +749,219 @@ static void ma_build_mic_page(lv_obj_t *tile)
   lv_obj_set_style_bg_opa(g_mic_peak_bar, LV_OPA_COVER, LV_PART_INDICATOR);
 }
 
+/* Settings page.
+ *
+ * The four thresholds that decide whether the fusion ever fires depend on how
+ * the watch is worn, how loud the room is and where the electrodes sit.  None
+ * of that can be worked out from a datasheet, so they are adjusted on the
+ * watch while watching the live scores beside them instead of being guessed at
+ * and reflashed.
+ */
+
+struct ma_tune_def_s
+{
+  const char *name;
+  int         step;
+  int         min;
+  int         max;
+};
+
+static const struct ma_tune_def_s g_tune_defs[] =
+{
+  { "IMU full",  250,  500, 8000 },
+  { "Mic floor",   5,    0,   80 },
+  { "Mic full",    5,   10,  100 },
+  { "Fused",       5,   20,   90 },
+  { "Agreeing",    1,    1,    3 },
+};
+
+#define MA_TUNE_COUNT  (sizeof(g_tune_defs) / sizeof(g_tune_defs[0]))
+
+static lv_obj_t *g_tune_lbl[MA_TUNE_COUNT];
+static lv_obj_t *g_lbl_tune_scores;
+
+/****************************************************************************
+ * Name: ma_tune_slot
+ *
+ * Description:
+ *   Map a row index onto the live value it edits.  A switch rather than a
+ *   table of pointers because the tuning structure is only reachable through
+ *   hs_mood_tuning(), which cannot be called from a static initialiser.
+ *
+ ****************************************************************************/
+
+static int *ma_tune_slot(uint32_t index)
+{
+  struct hs_mood_tuning_s *tuning = hs_mood_tuning();
+
+  switch (index)
+    {
+      case 0:  return &tuning->imu_full;
+      case 1:  return &tuning->mic_floor;
+      case 2:  return &tuning->mic_full;
+      case 3:  return &tuning->fused_threshold;
+      default: return &tuning->min_agreeing;
+    }
+}
+
+/****************************************************************************
+ * Name: ma_tune_event
+ *
+ * Description:
+ *   Step one threshold up or down.  The row index and the direction are
+ *   packed into the button's user data: positive means "more", negative
+ *   means "less", and the magnitude is the row plus one.
+ *
+ ****************************************************************************/
+
+static void ma_tune_event(lv_event_t *event)
+{
+  intptr_t  packed = (intptr_t)lv_event_get_user_data(event);
+  int       dir    = packed > 0 ? 1 : -1;
+  uint32_t  index  = (uint32_t)(packed > 0 ? packed : -packed) - 1;
+  int      *slot;
+  int       next;
+
+  if (index >= MA_TUNE_COUNT)
+    {
+      return;
+    }
+
+  slot = ma_tune_slot(index);
+  next = *slot + dir * g_tune_defs[index].step;
+
+  if (next < g_tune_defs[index].min)
+    {
+      next = g_tune_defs[index].min;
+    }
+  else if (next > g_tune_defs[index].max)
+    {
+      next = g_tune_defs[index].max;
+    }
+
+  *slot = next;
+}
+
+/****************************************************************************
+ * Name: ma_tune_reset_event
+ ****************************************************************************/
+
+static void ma_tune_reset_event(lv_event_t *event)
+{
+  (void)event;
+
+  hs_mood_reset_tuning();
+}
+
+/****************************************************************************
+ * Name: ma_build_tune_page
+ *
+ * Description:
+ *   One row per tunable value: name on the left, "-" and "+" on the right,
+ *   with the current number between them so the row reads as one control.
+ *
+ ****************************************************************************/
+
+static void ma_build_tune_page(lv_obj_t *tile)
+{
+  lv_obj_t *card;
+  lv_obj_t *key;
+  lv_obj_t *lbl;
+  uint32_t  i;
+
+  ma_create_page_header(tile, "TUNE");
+
+  card = ma_create_card(tile, 286);
+  lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 44);
+  ma_create_caption(card, "Fusion thresholds");
+
+  for (i = 0; i < MA_TUNE_COUNT; i++)
+    {
+      lv_coord_t y = 26 + (lv_coord_t)i * 42;
+
+      lbl = lv_label_create(card);
+      lv_obj_set_style_text_color(lbl, lv_color_hex(MA_COLOR_TEXT), 0);
+      lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
+      lv_obj_align(lbl, LV_ALIGN_TOP_LEFT, 0, y + 8);
+      lv_label_set_text(lbl, g_tune_defs[i].name);
+
+      key = ma_create_key(card, "+", 48, ma_tune_event,
+                          (void *)(intptr_t)(i + 1));
+      lv_obj_set_size(key, 48, 36);
+      lv_obj_align(key, LV_ALIGN_TOP_RIGHT, 0, y);
+
+      key = ma_create_key(card, "-", 48, ma_tune_event,
+                          (void *)(intptr_t)(-(intptr_t)(i + 1)));
+      lv_obj_set_size(key, 48, 36);
+      lv_obj_align(key, LV_ALIGN_TOP_RIGHT, -56, y);
+
+      g_tune_lbl[i] = lv_label_create(card);
+      lv_obj_set_style_text_color(g_tune_lbl[i], lv_color_hex(MA_COLOR_ACCENT),
+                                  0);
+      lv_obj_set_style_text_font(g_tune_lbl[i], &lv_font_montserrat_16, 0);
+      lv_obj_set_style_text_align(g_tune_lbl[i], LV_TEXT_ALIGN_RIGHT, 0);
+      lv_obj_set_width(g_tune_lbl[i], 52);
+      lv_obj_align(g_tune_lbl[i], LV_ALIGN_TOP_RIGHT, -112, y + 8);
+      lv_label_set_text(g_tune_lbl[i], "");
+    }
+
+  key = ma_create_key(card, "Reset", 140, ma_tune_reset_event, NULL);
+  lv_obj_align(key, LV_ALIGN_TOP_MID, 0, 26 + (lv_coord_t)MA_TUNE_COUNT * 42);
+
+  /* Live evidence, so the effect of a change is visible immediately. */
+
+  g_lbl_tune_scores = lv_label_create(tile);
+  lv_obj_set_style_text_color(g_lbl_tune_scores, lv_color_hex(MA_COLOR_MUTED),
+                              0);
+  lv_obj_set_style_text_font(g_lbl_tune_scores, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_align(g_lbl_tune_scores, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(g_lbl_tune_scores, LV_ALIGN_TOP_MID, 0, 342);
+  lv_label_set_text(g_lbl_tune_scores, "");
+}
+
+/****************************************************************************
+ * Name: ma_read_tuning
+ *
+ * Description:
+ *   Refresh the settings page: the numbers on the row labels and the live
+ *   sensor scores underneath them.  Runs on the LVGL thread.
+ *
+ ****************************************************************************/
+
+static void ma_read_tuning(void)
+{
+  static int  last[MA_TUNE_COUNT] = { -1, -1, -1, -1, -1 };
+  static char last_scores[64] = "";
+  struct hs_mood_result_s mood;
+  char                    buf[64];
+  uint32_t                i;
+
+  for (i = 0; i < MA_TUNE_COUNT; i++)
+    {
+      int value = *ma_tune_slot(i);
+
+      if (value != last[i])
+        {
+          last[i] = value;
+          lv_label_set_text_fmt(g_tune_lbl[i], "%d", value);
+        }
+    }
+
+  pthread_mutex_lock(&g_mood_lock);
+  mood = g_mood_result;
+  pthread_mutex_unlock(&g_mood_lock);
+
+  snprintf(buf, sizeof(buf), "IMU %d   Mic %d   GSR %d\nfused %d   agree %d",
+           mood.imu_score, mood.mic_score, mood.gsr_score, mood.confidence,
+           mood.agreeing);
+
+  if (strcmp(buf, last_scores) != 0)
+    {
+      memcpy(last_scores, buf, sizeof(last_scores));
+      lv_label_set_text(g_lbl_tune_scores, buf);
+    }
+}
+
 /****************************************************************************
  * Name: ma_ble_switch_event
  *
@@ -726,8 +997,10 @@ static void ma_refresh_ble_ui(void)
 {
   static int  last_state = -1;
   static bool last_peer;
+  static int  last_trace = -1;
   bool        peer;
   int         state = g_ble_state;
+  int         trace = hs_ble_trace_last();
 
   if (g_lbl_ble_state == NULL || g_sw_ble == NULL)
     {
@@ -735,6 +1008,15 @@ static void ma_refresh_ble_ui(void)
     }
 
   peer = hs_ble_gatt_peer_connected();
+
+  /* TEMPORARY: the trace is refreshed on its own so that it keeps up even
+   * when nothing else about the state changes. */
+
+  if (g_lbl_ble_trace != NULL && trace != last_trace)
+    {
+      last_trace = trace;
+      lv_label_set_text_fmt(g_lbl_ble_trace, "trace %d", trace);
+    }
 
   /* lv_label_set_text_fmt() reallocates the string and invalidates the
    * widget on every call, even when the resulting text is identical.  This
@@ -851,6 +1133,16 @@ static void ma_build_link_page(lv_obj_t *tile)
   lv_obj_align(g_lbl_ble_info, LV_ALIGN_TOP_MID, 0, 190);
   lv_label_set_text(g_lbl_ble_info,
                     "Tap the switch to advertise\nas a BLE peripheral");
+
+  /* TEMPORARY diagnostic read-out.  Whatever this says when the screen
+   * freezes is the step that was running. */
+
+  g_lbl_ble_trace = lv_label_create(tile);
+  lv_obj_set_style_text_color(g_lbl_ble_trace, lv_color_hex(MA_COLOR_MUTED),
+                              0);
+  lv_obj_set_style_text_font(g_lbl_ble_trace, &lv_font_montserrat_16, 0);
+  lv_obj_align(g_lbl_ble_trace, LV_ALIGN_TOP_MID, 0, 270);
+  lv_label_set_text(g_lbl_ble_trace, "trace 0");
 }
 
 /****************************************************************************
@@ -1033,6 +1325,8 @@ static FAR void *ma_sys_thread(FAR void *arg)
           g_vbat_mv = mv;
         }
 
+      g_tick_sys++;
+
       sleep(2);
     }
 
@@ -1156,6 +1450,8 @@ static FAR void *ma_imu_thread(FAR void *arg)
           g_imu_valid  = true;
           pthread_mutex_unlock(&g_imu_lock);
         }
+
+      g_tick_imu++;
 
       usleep(100000);
     }
@@ -1442,6 +1738,8 @@ static FAR void *ma_gsr_thread(FAR void *arg)
           g_ble_gsr_ok = 1;
         }
 
+      g_tick_gsr++;
+
       usleep(200000);
     }
 
@@ -1469,6 +1767,34 @@ static void ma_gsr_start(void)
     }
 
   pthread_attr_destroy(&attr);
+}
+
+/****************************************************************************
+ * Name: ma_read_fusion
+ *
+ * Description:
+ *   Mirror the published fusion result onto the MOOD page.
+ *
+ ****************************************************************************/
+
+static void ma_read_fusion(void)
+{
+  static char            last[64] = "";
+  struct hs_mood_result_s mood;
+  char                    buf[64];
+
+  pthread_mutex_lock(&g_mood_lock);
+  mood = g_mood_result;
+  pthread_mutex_unlock(&g_mood_lock);
+
+  snprintf(buf, sizeof(buf), "IMU %d  Mic %d\nGSR %d  fused %d",
+           mood.imu_score, mood.mic_score, mood.gsr_score, mood.confidence);
+
+  if (strcmp(buf, last) != 0)
+    {
+      memcpy(last, buf, sizeof(last));
+      lv_label_set_text(g_lbl_fusion, buf);
+    }
 }
 
 /****************************************************************************
@@ -1750,6 +2076,7 @@ static void ma_refresh_timer(lv_timer_t *timer)
   (void)timer;
 
   ma_refresh_ble_ui();
+  ma_mood_prompt();
 
   if (tile == NULL || tile == g_tiles[MA_PAGE_SYSTEM])
     {
@@ -1758,6 +2085,7 @@ static void ma_refresh_timer(lv_timer_t *timer)
   else if (tile == g_tiles[MA_PAGE_GSR])
     {
       ma_read_gsr();
+      ma_read_fusion();
     }
   else if (tile == g_tiles[MA_PAGE_PPG])
     {
@@ -1766,6 +2094,10 @@ static void ma_refresh_timer(lv_timer_t *timer)
   else if (tile == g_tiles[MA_PAGE_IMU])
     {
       ma_read_motion();
+    }
+  else if (tile == g_tiles[MA_PAGE_TUNE])
+    {
+      ma_read_tuning();
     }
 }
 
@@ -1917,6 +2249,247 @@ static void ma_ppg_start(void)
   pthread_attr_destroy(&attr);
 }
 
+static void ma_mood_prompt(void);
+
+/****************************************************************************
+ * Name: ma_mood_gather
+ *
+ * Description:
+ *   Collect one snapshot of everything the arousal fusion needs.
+ *
+ *   The hardware-specific interpretation happens here rather than inside the
+ *   fusion, so that the "electrodes are off the skin" threshold stays in one
+ *   place and hs_mood.c remains a pure function of its inputs.
+ *
+ *   accel_mg may be NULL when the caller only wants the fusion inputs.
+ *
+ * Returned Value:
+ *   True when a fresh IMU sample was available.
+ *
+ ****************************************************************************/
+
+static bool ma_mood_gather(struct hs_mood_input_s *input,
+                           int16_t accel_mg[3])
+{
+  bool imu_ok;
+
+  memset(input, 0, sizeof(*input));
+
+  /* Skin conductance.  The sensor drives the electrodes with a constant
+   * current, so a *rise* in conductance shows up as a *fall* in voltage -
+   * hence baseline minus current.
+   */
+
+  input->gsr_ready = g_gsr_valid && g_gsr_rest > 0 &&
+                     g_gsr_mv <= MA_GSR_NO_ELECTRODE_MV;
+  input->gsr_delta = g_gsr_rest - g_gsr_mv;
+  input->gsr_band  = g_gsr_band;
+
+  /* The microphone driver already publishes the relative 0..100 level the
+   * fusion wants.
+   */
+
+  input->mic_level = hs_mic_level();
+
+  /* Motion: the IMU thread owns the sensor, so take the published sample.
+   * The driver reports the gyro in milli-degrees per second; both the fusion
+   * and the telemetry packet want tenths of a degree, so the scaling happens
+   * once, here.
+   */
+
+  pthread_mutex_lock(&g_imu_lock);
+
+  imu_ok = g_imu_valid;
+
+  if (imu_ok)
+    {
+      input->accel_mg[0] = g_imu_sample.accel_x_mg;
+      input->accel_mg[1] = g_imu_sample.accel_y_mg;
+      input->accel_mg[2] = g_imu_sample.accel_z_mg;
+
+      input->gyro_dps10[0] = (int16_t)(g_imu_sample.gyro_x_mdps / 100);
+      input->gyro_dps10[1] = (int16_t)(g_imu_sample.gyro_y_mdps / 100);
+      input->gyro_dps10[2] = (int16_t)(g_imu_sample.gyro_z_mdps / 100);
+    }
+
+  pthread_mutex_unlock(&g_imu_lock);
+
+  if (accel_mg != NULL)
+    {
+      accel_mg[0] = input->accel_mg[0];
+      accel_mg[1] = input->accel_mg[1];
+      accel_mg[2] = input->accel_mg[2];
+    }
+
+  return imu_ok;
+}
+
+/****************************************************************************
+ * Name: ma_mood_thread
+ *
+ * Description:
+ *   Run the arousal fusion once a second and publish the verdict.
+ *
+ *   This deliberately does not depend on Bluetooth.  The confirmation prompt
+ *   on screen has to work whether or not a phone happens to be connected, so
+ *   the fusion lives here and both the UI and the BLE worker read the
+ *   published result instead of each computing their own.
+ *
+ *   One second is not an arbitrary choice: hs_mood.c smooths its inputs with
+ *   leaky integrators whose time constants are expressed in update periods,
+ *   so calling it at a different rate would change the effective response.
+ *
+ ****************************************************************************/
+
+static FAR void *ma_mood_thread(FAR void *arg)
+{
+  struct hs_mood_input_s  input;
+  struct hs_mood_result_s result;
+  bool prev = false;
+
+  (void)arg;
+
+  hs_mood_init();
+
+  while (g_sys_run)
+    {
+      ma_mood_gather(&input, NULL);
+      hs_mood_update(&input, &result);
+
+      pthread_mutex_lock(&g_mood_lock);
+      g_mood_result = result;
+      pthread_mutex_unlock(&g_mood_lock);
+
+      /* Ask on the rising edge only.  The fusion already latches its verdict
+       * for a few seconds, so prompting on the level would queue one dialog
+       * after another for the same event.
+       */
+
+      if (result.agitated && !prev)
+        {
+          g_mood_ask = true;
+        }
+
+      prev = result.agitated;
+
+      sleep(1);
+    }
+
+  return NULL;
+}
+
+/****************************************************************************
+ * Name: ma_mood_start
+ ****************************************************************************/
+
+static void ma_mood_start(void)
+{
+  pthread_attr_t attr;
+
+  if (pthread_attr_init(&attr) != 0)
+    {
+      return;
+    }
+
+  pthread_attr_setstacksize(&attr, 3072);
+
+  if (pthread_create(&g_mood_thread, &attr, ma_mood_thread, NULL) == 0)
+    {
+      pthread_detach(g_mood_thread);
+    }
+
+  pthread_attr_destroy(&attr);
+}
+
+/****************************************************************************
+ * Name: ma_mood_answer_event
+ *
+ * Description:
+ *   The wearer judged the prompt: the arousal was real, or the fusion got it
+ *   wrong.  Counting the two apart is the point of asking at all.
+ *
+ ****************************************************************************/
+
+static void ma_mood_answer_event(lv_event_t *event)
+{
+  intptr_t  answer = (intptr_t)lv_event_get_user_data(event);
+  lv_obj_t *box    = g_mood_box;
+
+  if (answer != 0)
+    {
+      g_mood_confirmed++;
+      printf("mood: agitation confirmed (%d) / false alarm (%d)\n",
+             g_mood_confirmed, g_mood_false);
+    }
+  else
+    {
+      g_mood_false++;
+      printf("mood: agitation marked a false alarm (%d/%d)\n",
+             g_mood_confirmed, g_mood_false);
+    }
+
+  if (box != NULL)
+    {
+      g_mood_box = NULL;
+
+      /* Closing from inside the dialog's own event needs the deferred form:
+       * deleting it here would free the object whose callback is still on
+       * the stack.
+       */
+
+      lv_msgbox_close_async(box);
+    }
+}
+
+/****************************************************************************
+ * Name: ma_mood_prompt
+ *
+ * Description:
+ *   Put the confirmation dialog up when the fusion has just decided that the
+ *   wearer is agitated.  Runs on the LVGL thread, like everything else that
+ *   touches widgets.
+ *
+ ****************************************************************************/
+
+static void ma_mood_prompt(void)
+{
+  struct hs_mood_result_s result;
+  lv_obj_t *box;
+  lv_obj_t *btn;
+  char      text[160];
+
+  if (!g_mood_ask || g_mood_box != NULL)
+    {
+      return;
+    }
+
+  g_mood_ask = false;
+
+  pthread_mutex_lock(&g_mood_lock);
+  result = g_mood_result;
+  pthread_mutex_unlock(&g_mood_lock);
+
+  snprintf(text, sizeof(text),
+           "Fused confidence %d%%\nIMU %d   Mic %d   GSR %d\n\n"
+           "Was that real agitation?",
+           result.confidence, result.imu_score, result.mic_score,
+           result.gsr_score);
+
+  box        = lv_msgbox_create(lv_layer_top());
+  g_mood_box = box;
+
+  lv_msgbox_add_title(box, "Agitation detected");
+  lv_msgbox_add_text(box, text);
+
+  btn = lv_msgbox_add_footer_button(box, "Yes, real");
+  lv_obj_add_event_cb(btn, ma_mood_answer_event, LV_EVENT_CLICKED,
+                      (void *)(intptr_t)1);
+
+  btn = lv_msgbox_add_footer_button(box, "No, false alarm");
+  lv_obj_add_event_cb(btn, ma_mood_answer_event, LV_EVENT_CLICKED,
+                      (void *)(intptr_t)0);
+}
+
 /****************************************************************************
  * Name: ma_ble_data_thread
  *
@@ -1941,54 +2514,28 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
   while (g_ble_data_run)
     {
       memset(&sample, 0, sizeof(sample));
-      memset(&input, 0, sizeof(input));
 
-      /* Skin conductance.  The sampling thread already has the electrode
-       * voltage; the interpretation is done here so the "not worn" threshold
-       * stays in one place.  Note the sensor drives the electrodes with a
-       * constant current, so a *rise* in conductance shows up as a *fall* in
-       * voltage - hence baseline minus current.
+      /* Inputs first: the BLE packet carries the raw values, so this thread
+       * still has to collect them even though the verdict itself is computed
+       * elsewhere.
        */
-
-      input.gsr_ready = g_gsr_valid && g_gsr_rest > 0 &&
-                        g_gsr_mv <= MA_GSR_NO_ELECTRODE_MV;
-      input.gsr_delta = g_gsr_rest - g_gsr_mv;
-      input.gsr_band  = g_gsr_band;
 
       sample.gsr_valid = g_gsr_valid;
       sample.gsr_mv    = (uint16_t)g_gsr_mv;
 
-      /* Microphone: the driver publishes a relative 0..100 level, which is
-       * exactly the scale the fusion wants.
-       */
-
-      input.mic_level  = hs_mic_level();
+      sample.imu_valid = ma_mood_gather(&input, sample.accel_mg);
       sample.mic_valid = g_mic_ok;
       sample.mic_level = (uint8_t)input.mic_level;
 
-      /* Motion: the IMU thread owns the sensor, so read the published sample
-       * rather than issuing a blocking read on the same descriptor.  The
-       * driver reports the gyro in milli-degrees per second; the fusion and
-       * the packet both want tenths of a degree, so the scaling happens once,
-       * here.
+      /* The fusion runs on the mood thread so the confirmation prompt works
+       * even with Bluetooth off; here we only report the published verdict.
        */
 
-      pthread_mutex_lock(&g_imu_lock);
-      if (g_imu_valid)
-        {
-          input.accel_mg[0] = g_imu_sample.accel_x_mg;
-          input.accel_mg[1] = g_imu_sample.accel_y_mg;
-          input.accel_mg[2] = g_imu_sample.accel_z_mg;
-          input.gyro_dps10[0] = (int16_t)(g_imu_sample.gyro_x_mdps / 100);
-          input.gyro_dps10[1] = (int16_t)(g_imu_sample.gyro_y_mdps / 100);
-          input.gyro_dps10[2] = (int16_t)(g_imu_sample.gyro_z_mdps / 100);
+      pthread_mutex_lock(&g_mood_lock);
+      result = g_mood_result;
+      pthread_mutex_unlock(&g_mood_lock);
 
-          sample.imu_valid = true;
-          sample.accel_mg[0] = g_imu_sample.accel_x_mg;
-          sample.accel_mg[1] = g_imu_sample.accel_y_mg;
-          sample.accel_mg[2] = g_imu_sample.accel_z_mg;
-        }
-      pthread_mutex_unlock(&g_imu_lock);
+      sample.gyro_dps10 = (uint16_t)result.gyro_mag_dps10;
 
       /* Vitals ride along on the same packet; they are not part of the
        * arousal decision, but the phone already knows what to do with them.
@@ -2022,9 +2569,20 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
 
       /* --- fusion ------------------------------------------------------- */
 
-      hs_mood_update(&input, &result);
-
       sample.gyro_dps10 = (uint16_t)result.gyro_mag_dps10;
+      /* Heartbeat: see the note on g_tick_sys.  Two seconds is enough to see
+       * where it stops while still keeping the console link busy, which is
+       * what stops the USB adapter from dropping during the idle periods.
+       */
+
+      if ((g_hb_seq++ & 1u) == 0)
+        {
+          printf("[hb] sys=%lu imu=%lu gsr=%lu ble=%d peer=%d mood=%d/%d\n",
+                 (unsigned long)g_tick_sys, (unsigned long)g_tick_imu,
+                 (unsigned long)g_tick_gsr, g_ble_state,
+                 (int)hs_ble_gatt_peer_connected(), (int)result.agitated,
+                 result.confidence);
+        }
 
       /* Buttons and the vibration motor are no longer part of the payload,
        * but polling them here is what keeps the SYSTEM page's sensor
@@ -2073,8 +2631,13 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
           mood.flags |= HS_BLE_MOOD_GSR_POSITIVE;
         }
 
+      hs_ble_trace(HS_BLE_TRACE_SEND_DATA);
       hs_ble_data_notify(&sample);
+
+      hs_ble_trace(HS_BLE_TRACE_SEND_STAT);
       hs_ble_status_notify(&mood);
+
+      hs_ble_trace(HS_BLE_TRACE_SENT);
 
       /* The controller stops advertising as soon as a phone connects and
        * never resumes it by itself: re-arm it after a disconnect.
@@ -2108,7 +2671,13 @@ static FAR void *ma_ble_start_worker(FAR void *arg)
   ret = hs_ble_host_start();
   if (ret >= 0)
     {
+      hs_ble_trace(HS_BLE_TRACE_HOST_UP);
       ret = hs_ble_gatt_start(NULL);
+
+      if (ret >= 0)
+        {
+          hs_ble_trace(HS_BLE_TRACE_GATT);
+        }
     }
 
   if (ret < 0)
@@ -2141,6 +2710,7 @@ static FAR void *ma_ble_start_worker(FAR void *arg)
 
 static void ma_ble_start_async(void)
 {
+  hs_ble_trace(HS_BLE_TRACE_SWITCH);
   pthread_attr_t attr;
   struct sched_param param;
 
@@ -2317,6 +2887,7 @@ int main(int argc, FAR char *argv[])
   ma_build_vitals_page(g_tiles[MA_PAGE_PPG]);
   ma_build_motion_page(g_tiles[MA_PAGE_IMU]);
   ma_build_mic_page(g_tiles[MA_PAGE_MIC]);
+  ma_build_tune_page(g_tiles[MA_PAGE_TUNE]);
   ma_build_nav(screen);
 
   lv_timer_create(ma_refresh_timer, MA_REFRESH_MS, NULL);
@@ -2333,6 +2904,7 @@ int main(int argc, FAR char *argv[])
   ma_mic_start();
   ma_imu_start();
   ma_gsr_start();
+  ma_mood_start();
 
   /* Bluetooth stays off until the LINK page switch is touched.  Bringing the
    * host stack up costs a burst of synchronous HCI traffic, and starting it

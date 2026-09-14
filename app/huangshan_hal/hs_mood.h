@@ -50,14 +50,6 @@
 
 #define HS_MOOD_POSITIVE         50
 
-/* Fused confidence needed to report arousal, in percent. */
-
-#define HS_MOOD_FUSED_THRESHOLD  55
-
-/* How many of the three sensors have to agree. */
-
-#define HS_MOOD_MIN_AGREEING     2
-
 /* Once arousal has been reported it stays reported for at least this many
  * updates, so a state that the phone turns into a notification cannot
  * flicker on and off around the threshold.
@@ -65,34 +57,54 @@
 
 #define HS_MOOD_HOLD_UPDATES     5
 
+/* Defaults for the values that can be tuned on the watch itself.
+ *
+ * The four that decide whether anything triggers at all are runtime values
+ * rather than compile-time constants because they depend on how the watch is
+ * worn, how loud the room is and where the electrodes sit - none of which can
+ * be worked out from a datasheet.  Being able to move them while watching the
+ * per-sensor scores change beats guessing and reflashing.
+ */
+
+#define HS_MOOD_DEF_IMU_FULL         2000
+#define HS_MOOD_DEF_MIC_FLOOR        20
+#define HS_MOOD_DEF_MIC_FULL         65
+#define HS_MOOD_DEF_FUSED_THRESHOLD  50
+#define HS_MOOD_DEF_MIN_AGREEING     2
+
 /* Weights used to combine the three scores.  They sum to 100.  The skin
- * conductance gets the largest share because it is the only one of the three
- * that measures autonomic arousal directly; motion and loudness are both
- * easily produced without any emotional cause.
+ * conductance gets the largest single share because it is the only one of
+ * the three that measures autonomic arousal directly; motion and loudness are
+ * both easily produced without any emotional cause.
+ *
+ * A sensor that is not ready (the electrodes are off the skin, so the skin
+ * conductance has no opinion to offer) is dropped from the sum entirely and
+ * the remaining weights are renormalised.  Leaving its weight in the divisor
+ * would silently cap how agitated the fusion is allowed to look - with the
+ * weights below, a missing GSR would hold the maximum reachable score down
+ * to 70, which is not obvious from reading the numbers.
  */
 
-#define HS_MOOD_W_GSR            40
-#define HS_MOOD_W_IMU            30
-#define HS_MOOD_W_MIC            30
-
-/* Full-scale activity for the IMU, in the same arbitrary unit the score is
- * computed from: |accel| deviation from 1 g (mg) + 10 x rotation (dps).
- * Standing still sits near 20, walking near 1200, shaking the watch several
- * thousand.
- */
-
-#define HS_MOOD_IMU_FULL         3000
-
-/* Loudness on the microphone's relative 0..100 scale that counts as fully
- * loud, and the level below which it counts as quiet.
- */
-
-#define HS_MOOD_MIC_FULL         85
-#define HS_MOOD_MIC_FLOOR        45
+#define HS_MOOD_W_GSR            30
+#define HS_MOOD_W_IMU            35
+#define HS_MOOD_W_MIC            35
 
 /****************************************************************************
  * Public Types
  ****************************************************************************/
+
+/* The values the watch lets the wearer adjust.  See the note on the defaults
+ * above for why these are not constants.
+ */
+
+struct hs_mood_tuning_s
+{
+  int imu_full;          /* activity that scores 100 */
+  int mic_floor;         /* loudness below which the microphone scores 0 */
+  int mic_full;          /* loudness that scores 100 */
+  int fused_threshold;   /* fused confidence needed to report arousal */
+  int min_agreeing;      /* how many sensors have to agree, 1..3 */
+};
 
 /* One snapshot of everything the fusion needs.
  *
@@ -152,6 +164,27 @@ struct hs_mood_result_s
  ****************************************************************************/
 
 void hs_mood_init(void);
+
+/****************************************************************************
+ * Name: hs_mood_tuning
+ *
+ * Description:
+ *   The live tuning values, which the settings page edits in place.  Returns
+ *   the defaults filled in the first time it is called.
+ *
+ ****************************************************************************/
+
+struct hs_mood_tuning_s *hs_mood_tuning(void);
+
+/****************************************************************************
+ * Name: hs_mood_reset_tuning
+ *
+ * Description:
+ *   Put every tunable back to its default.
+ *
+ ****************************************************************************/
+
+void hs_mood_reset_tuning(void);
 
 /****************************************************************************
  * Name: hs_mood_update
