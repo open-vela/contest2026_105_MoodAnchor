@@ -79,9 +79,10 @@
  * baseline that was captured while the subject was calm.  The page therefore
  * reports a classification, not a number.
  *
- * A Grove GSR board outputs a few hundred millivolts with the electrodes
- * floating and roughly 2 V on skin, so a low reading is treated as "not
- * attached" rather than as an extremely relaxed subject.
+ * The Grove GSR board drives the electrodes with a constant current, so good
+ * contact shows up as a *low* voltage across them and floating pads as a
+ * high one.  A reading above MA_GSR_NO_ELECTRODE_MV therefore means "not
+ * attached" rather than "an extremely relaxed subject".
  */
 
 #define MA_GSR_NO_ELECTRODE   0         /* electrodes not on skin */
@@ -89,7 +90,11 @@
 #define MA_GSR_STABLE         2         /* inside the band */
 #define MA_GSR_CHANGED        3         /* outside the band */
 
-#define MA_GSR_ELECTRODE_MV   1000      /* below this the pads are floating */
+/* The pads read high when floating and low on skin - see the note above the
+ * classification constants.  Measured here: ~2000 mV detached, <500 mV worn.
+ */
+
+#define MA_GSR_NO_ELECTRODE_MV 1500    /* above this the pads are floating */
 #define MA_GSR_BAND_STEP      50        /* adjustment step of the -/+ keys */
 #define MA_GSR_BAND_MIN       50
 #define MA_GSR_BAND_MAX       500
@@ -1431,7 +1436,7 @@ static void ma_read_gsr(void)
 
   mv = g_gsr_mv;
 
-  if (mv < MA_GSR_ELECTRODE_MV)
+  if (mv > MA_GSR_NO_ELECTRODE_MV)
     {
       class = MA_GSR_NO_ELECTRODE;
     }
@@ -1542,7 +1547,7 @@ static void ma_gsr_cal_event(lv_event_t *event)
 {
   (void)event;
 
-  if (g_gsr_mv < MA_GSR_ELECTRODE_MV)
+  if (g_gsr_mv > MA_GSR_NO_ELECTRODE_MV)
     {
       /* Nothing to capture while the pads are floating: storing that reading
        * would make every later sample look like a change.
