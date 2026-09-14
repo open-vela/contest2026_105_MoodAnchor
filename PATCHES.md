@@ -40,6 +40,31 @@ CONFIG_BLUETOOTH_UART_SHIM=y
 CONFIG_BLUETOOTH_UART_OTHER=y
 ```
 
+### 4. `vendor/sifli/chips/sf32lb52/sf32lb_adc.c` — ADC 单次读取耗时
+
+`adc_read()` 的平均采样循环里，两次转换之间要等 10 ms：
+
+```c
+total += data[i];
+HAL_Delay_us(10 * 1000);      /* 20 次 × 10 ms = 单次调用阻塞约 200 ms */
+```
+
+而一次转换只需要 `sample_width + conv_width = 146` 个 ADC 时钟（几十 µs），
+并且本板要测的两路信号 —— 电池电压、Grove GSR 电极 —— 都是**秒级慢变**。
+
+**改为 `HAL_Delay_us(1000)`**，单次 `hs_adc_read()` 从约 200 ms 降到约 20 ms。
+
+影响面：
+
+- UI 定时器与 `huangshan_hal_demo` 的 GSR 采样不再长时间阻塞渲染线程
+- 代码里声明的 **5 Hz GSR 采样率此前实际达不到**（200 ms/次 → 最多 4 Hz 且卡顿）
+- 平均次数仍为 20（去最大最小后 18 次平均），**精度不变**
+
+> 补充：`sf32lb_adc_calibrate()` 在黄山派上会**跳过读取校准数据**（注释说明是
+> 怕 `HAL_LCPU_CONFIG_get()` 在单核板上挂死 HCPU），改用硬编码默认值
+> `vol10=1758 / vol25=3162 / low_mv=1000 / high_mv=2500`，即
+> `ratio=1068 / offset=822`。这是 vendor 的既有取舍，未改动。
+
 ## 可选改动
 
 ### 2. `vendor/sifli/boards/sf32lb52/lckfb_huangshan_pi/configs/nsh/defconfig`
