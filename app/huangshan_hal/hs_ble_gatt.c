@@ -757,16 +757,17 @@ static int hs_ble_adv_apply(void)
   ad[0].len = 2;
   ad[0].type = BT_EIR_FLAGS;
 
-  /* LE general discoverable WITHOUT the "BR/EDR not supported" bit.  The
-   * controller is LE only, but several Android ROMs derive their system
-   * Bluetooth list from the classic inquiry and skip peripherals that
-   * advertise BR/EDR not supported, which makes the watch invisible in the
-   * phone settings even though BLE scanners see it fine.  Claiming BR/EDR
-   * support costs nothing here: nobody performs a classic inquiry, so the
-   * flag is only ever inspected by the phone's scanner UI.
+  /* LE general discoverable + BR/EDR not supported (0x06).
+   *
+   * Claiming BR/EDR support (0x02) was tried as a way to make the watch show
+   * up in the Android system Bluetooth list, but phones then treat it as a
+   * dual mode device and try to reach a classic side that does not exist:
+   * scanners stall and connections start failing.  The list on many ROMs
+   * only shows classic or dual mode peripherals, and this controller has no
+   * BR/EDR radio, so the flag stays truthful.
    */
 
-  ad[0].data[0] = 0x02;
+  ad[0].data[0] = 0x06;
 
   ad[1].len = 3;
   ad[1].type = BT_EIR_GAP_APPEARANCE;

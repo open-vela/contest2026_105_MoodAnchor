@@ -383,7 +383,7 @@ static void ma_refresh_ble_ui(void)
   bool        peer;
   int         state = g_ble_state;
 
-  if (g_lbl_ble_state == NULL)
+  if (g_lbl_ble_state == NULL || g_sw_ble == NULL)
     {
       return;
     }
@@ -403,6 +403,21 @@ static void ma_refresh_ble_ui(void)
 
   last_state = state;
   last_peer  = peer;
+
+  /* The peripheral now comes up by itself at boot, so the switch has to
+   * follow the state machine instead of driving it.  lv_obj_add_state() and
+   * lv_obj_remove_state() do not emit VALUE_CHANGED, so this cannot bounce
+   * back into the touch handler.
+   */
+
+  if (state == MA_BLE_ON || state == MA_BLE_STARTING)
+    {
+      lv_obj_add_state(g_sw_ble, LV_STATE_CHECKED);
+    }
+  else
+    {
+      lv_obj_remove_state(g_sw_ble, LV_STATE_CHECKED);
+    }
 
   switch (state)
     {
@@ -873,7 +888,7 @@ static FAR void *ma_ppg_thread(FAR void *arg)
             }
         }
 
-      usleep(5000);
+      usleep(10000);
     }
 
   if (g_max_open)
