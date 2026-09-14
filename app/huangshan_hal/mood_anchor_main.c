@@ -30,6 +30,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <malloc.h>
 #include <pthread.h>
 #include <sched.h>
 #include <stdbool.h>
@@ -2071,9 +2072,22 @@ static void ma_read_motion(void)
 
 static void ma_refresh_timer(lv_timer_t *timer)
 {
+  static uint32_t ui_tick;
   lv_obj_t *tile = lv_tileview_get_tile_active(g_tileview);
 
   (void)timer;
+
+  /* TEMPORARY: the LVGL thread is the only one that can freeze the picture
+   * on screen, so it needs its own heartbeat to tell "the UI thread stopped"
+   * apart from "the UI thread is fine but the panel is not being flushed".
+   * Paired with [hb] from the BLE thread this pinpoints which side wedged.
+   * Remove together with hs_ble_trace().
+   */
+
+  if ((ui_tick++ % (2000 / MA_REFRESH_MS)) == 0)
+    {
+      printf("[ui] %lu\n", (unsigned long)ui_tick);
+    }
 
   ma_refresh_ble_ui();
   ma_mood_prompt();
@@ -2577,11 +2591,21 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
 
       if ((g_hb_seq++ & 1u) == 0)
         {
-          printf("[hb] sys=%lu imu=%lu gsr=%lu ble=%d peer=%d mood=%d/%d\n",
+          /* The heap figure is here because the host stack allocates a
+           * 16 KB stack for its ACL transmit thread the moment a phone
+           * connects (kthread_create in bt_conn_set_state).  If the heap is
+           * too tight for that it does not fail gracefully, so the trend
+           * before the connection matters.
+           */
+
+          struct mallinfo mi = mallinfo();
+
+          printf("[hb] sys=%lu imu=%lu gsr=%lu ble=%d peer=%d mood=%d/%d"
+                 " heap=%d\n",
                  (unsigned long)g_tick_sys, (unsigned long)g_tick_imu,
                  (unsigned long)g_tick_gsr, g_ble_state,
                  (int)hs_ble_gatt_peer_connected(), (int)result.agitated,
-                 result.confidence);
+                 result.confidence, mi.fordblks);
         }
 
       /* Buttons and the vibration motor are no longer part of the payload,
@@ -2691,7 +2715,15 @@ static FAR void *ma_ble_start_worker(FAR void *arg)
 
   if (pthread_attr_init(&attr) == 0)
     {
-      pthread_attr_setstacksize(&attr, 4096);
+      /* 4 KB was too tight.  Every second this thread pushes a notification
+       * through bt_gatt_notify(), which is not a shallow call: GATT -> ATT ->
+       * L2CAP -> bt_conn_send -> mqueue -> HCI -> vendor IPC, with a printf
+       * on top.  NuttX gives its own Bluetooth threads 16 KB for exactly this
+       * reason, and a stack overflow here corrupts the heap instead of
+       * failing loudly.
+       */
+
+      pthread_attr_setstacksize(&attr, 12288);
       if (pthread_create(&g_ble_thread, &attr, ma_ble_data_thread, NULL) == 0)
         {
           pthread_detach(g_ble_thread);

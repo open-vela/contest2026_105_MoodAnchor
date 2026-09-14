@@ -1,0 +1,21 @@
+
+=== [22:24:22] port opened ===
+[22:24:22] SFBL
+[22:24:24] ABCD[0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc0 initm[22:24:25] [0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc1 init done, ret=0
+[0m[22:24:25] [0mINFO: LSM6DS3 test device registered as /dev/lsm6dsl0, INT=31
+[0m[0m[33mWARN: skip HAL_FLASH_Init during XIP bringup, NOR write/erase disabled
+[0m[0mINFO: NOR MTD registered at /dev/config0 (offset=2464 blocks=1024)
+[0m[22:24:27] mood_anchor [8:100]
+
+NuttShell (NSH)
+nsh> [K[0m[31;1m[LVGL] [User]	(2.700, +2700)	 check_stack_size: tid: 8, Stack size : 40856 lv_nuttx_entry.c:283
+[0m[0m[31;1m[LVGL] [User]	(2.703, +3)	 lv_nuttx_lcd_create: lcd /dev/lcd0 openin[0m[31;1m[LVGL] [User]	(2.718, +13)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 opening lv_nuttx_touchscreen.c:79
+[0m[31;1m[LVGL] [User]	(2.721, +3)	 lv_nuttx_touchscreen_creatput0 open success, maxpoint 1 lv_nuttx_touchscreen.c:98
+[0m[22:24:27] [ui] 1
+MoodAnchor UI running (swipe for VITALS / MOTION / LINK)
+[22:24:28] mood: microphone started
+[22:24:29] [ui] 5

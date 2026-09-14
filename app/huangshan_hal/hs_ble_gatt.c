@@ -465,13 +465,11 @@ static void hs_ble_ccc_cfg_changed(uint16_t value)
 
   g_peer_connected = (value != 0);
 
-  /* TEMPORARY: the connect path had no logging at all, which is why a hang
-   * here looked like the device simply going silent.  Remove once the
-   * freeze is fixed.
+  /* Do not log from here.  This callback runs in the receive path of the
+   * Bluetooth thread, i.e. the thread that also has to deliver the HCI event
+   * completing a command.  A blocked console write at that point stalls the
+   * host stack, and the trace code below is enough to see the transition.
    */
-
-  printf("[BLE] ccc value=0x%04x peer=%d\n", (unsigned)value,
-         (int)g_peer_connected);
 
   hs_ble_trace(g_peer_connected ? HS_BLE_TRACE_CCC_SUB
                                 : HS_BLE_TRACE_CCC_UNSUB);
@@ -1016,7 +1014,12 @@ int hs_ble_event_notify(uint8_t type, uint8_t risk, uint8_t confidence,
         {
           if (pthread_attr_init(&attr) == 0)
             {
-              pthread_attr_setstacksize(&attr, 1024);
+              /* This thread issues the blocking HCI stop/set/enable
+               * advertising sequence, so it needs room for the command path
+               * plus the vendor IPC driver, not just a sleep().
+               */
+
+              pthread_attr_setstacksize(&attr, 4096);
               if (pthread_create(&tid, &attr, hs_ble_boost_thread,
                                  (FAR void *)(intptr_t)gen) == 0)
                 {
@@ -1115,16 +1118,25 @@ int hs_ble_data_notify(const struct hs_ble_sample_s *sample)
    * rarely moves, and unsolicited traffic keeps an idle phone awake.
    */
 
-  if (sample->bat_valid && sample->battery != HS_BLE_STATUS_BAT_UNKNOWN &&
+  if (g_peer_connected && sample->bat_valid &&
+      sample->battery != HS_BLE_STATUS_BAT_UNKNOWN &&
       sample->battery != g_battery)
     {
       g_battery = sample->battery;
       bt_gatt_notify(HS_H_BAS_LEVEL_VAL, &g_battery, sizeof(g_battery));
     }
 
-  /* No-op unless a peer has written the data CCC descriptor */
+  /* No peer, no subscriber, nothing to send.  Skipping the call here keeps
+   * the stack out of the send path entirely while the link is being torn
+   * down, when the CCC still says NOTIFY but the connection is already on its
+   * way out.
+   */
 
-  bt_gatt_notify(HS_H_DATA_VAL, g_data_pkt, sizeof(g_data_pkt));
+  if (g_peer_connected)
+    {
+      bt_gatt_notify(HS_H_DATA_VAL, g_data_pkt, sizeof(g_data_pkt));
+    }
+
   return OK;
 }
 
@@ -1168,9 +1180,13 @@ int hs_ble_status_notify(const struct hs_ble_mood_s *mood)
   g_status_pkt[10] = mood->gsr_score;
   g_status_pkt[11] = 0;
 
-  /* No-op unless a peer has written the status CCC descriptor */
+  /* Same guard as the data characteristic: no peer means nothing to send. */
 
-  bt_gatt_notify(HS_H_STATUS_VAL, g_status_pkt, sizeof(g_status_pkt));
+  if (g_peer_connected)
+    {
+      bt_gatt_notify(HS_H_STATUS_VAL, g_status_pkt, sizeof(g_status_pkt));
+    }
+
   return OK;
 }
 
