@@ -125,7 +125,7 @@ OPENVELA_ROOT=/path/to/openvela scripts/build_huangshan.sh
 | Android App 的事件触发与交互 | [App 事件流程演示](videos/05_android_event_flow.mp4) |
 | 情绪日历、铃声和设备状态设置 | [日历与音频设置演示](videos/06_android_calendar_and_audio.mp4) |
 
-视频与 PPT 对应关系和当前演示边界见 [videos/README.md](videos/README.md)。
+各视频的功能说明和当前演示边界见 [videos/README.md](videos/README.md)。
 
 ### 后端与局域网演示
 
