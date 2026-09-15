@@ -73,7 +73,7 @@ MoodAnchor（是非钟）是面向黄山派开发板与 Android 手机的智能�
 | --- | --- | --- |
 | `app/huangshan_hal/` | 黄山派手表端 C 代码：硬件抽象、GSR/IMU、BLE、事件主程序 | 是，映射到 `packages/demos/contest2026_105_huangshan_hal` |
 | `android/` | Android App 源码、Gradle wrapper 和资源 | 否，独立 Android Studio / Gradle 工程 |
-| `backend/` | Python 模型代理与脱敏环境变量模板 | 否，部署在受控服务器或演示主机 |
+| `backend/` | **云端对话服务中转站**：手机把用户主动发起的陪伴对话发送到这里；它再调用部署者配置的大语言模型，并把回答返回手机。模型密钥只放在服务器，不进入 APK | 否，可部署在个人电脑、云服务器或比赛演示主机 |
 | `algorithm/imu_eda/` | IMU+EDA 训练、评估、端侧模型、参数和指标摘要；不含原始数据集 | 否 |
 | `artifacts/` | 可供评审安装的演示 APK | 否 |
 | `tools/` | Windows 局域网演示、端口转发及防火墙脚本 | 否 |
@@ -116,7 +116,11 @@ OPENVELA_ROOT=/path/to/openvela scripts/build_huangshan.sh
 
 ### 后端与局域网演示
 
-在部署主机通过环境变量设置模型凭据；可参考 `backend/.env.example` 的变量名称，但不要提交真实值。Windows PowerShell 示例：
+`backend/` 可以理解为 App 与云端大语言模型之间的“安全接线员”：App 不直接保存或调用模型平台的密钥，而是向你们部署的服务发起对话请求；服务再调用 Coze 或 SiliconFlow/Qwen，并把结果回传。演示时它可运行在电脑或云服务器上；正式部署应使用 HTTPS、访问控制与限流。
+
+代码和配置模板可以完全开源，**真实 API Key 不可以开源**：一旦出现在 GitHub、APK、截图或视频里，任何人都能消耗账户额度、读取对应服务资源，且撤销前无法收回。仓库中的 `backend/.env.example` 只保留变量名与占位符；每位部署者在自己的服务器环境变量中填写自己的 Key。
+
+Windows PowerShell 演示部署示例：
 
 ```powershell
 $env:COZE_API_KEY = "<masked>"

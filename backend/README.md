@@ -1,4 +1,13 @@
-MoodAnchor Coze 后端（Python 标准库，无需 pip install）
+## MoodAnchor 云端对话服务
+
+这是手机 App 与云端大语言模型之间的轻量中转服务，使用 Python 标准库，无需 `pip install`。
+
+```text
+Android App → MoodAnchor 后端（你们部署） → Coze / SiliconFlow 等模型服务
+              ↑ 真实 API Key 仅在这里
+```
+
+App 只请求本服务的 `/chat` 接口；真实模型 Key 不写入 Android 源码、APK、Git 仓库、演示视频或截图。
 
 在部署环境中设置真实值；`.env.example` 仅用于查看变量名称，不会被本服务
 自动加载。若使用 `.env` 文件，请由部署工具加载为进程环境变量，且 `.env`
@@ -16,3 +25,9 @@ MoodAnchor Coze 后端（Python 标准库，无需 pip install）
 聊天接口：POST /chat，JSON：{"message":"你好","user_id":"设备随机ID"}
 
 注意：正式服务应在前面配置 HTTPS、持久化限流和用户鉴权。
+
+## 开源边界
+
+`server.py`、部署说明和 `.env.example` 可以公开提交。真正的 `COZE_API_KEY`、
+`SILICONFLOW_API_KEY`、服务器登录密码、证书及 `.env` 文件必须保留在部署者自己的
+环境中；即使仓库完全开源，也不能把这些凭据一同发布。
