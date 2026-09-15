@@ -122,9 +122,9 @@ printf("sf32lb52 bt: LCPU up in %lu ms\n",
        (unsigned long)(HAL_GetTick() - t0));
 ```
 
-注意本板 **`CONFIG_SYSLOG_CHAR` / `CONFIG_SYSLOG_CONSOLE` 都没开**，该文件里
-原有的 `syslog()` 全是黑洞，所以这里必须用 `printf`（并补
-`#include <stdio.h>`）。
+注意该文件原有的 `syslog()` 在本板**是可见的**（见下面「踩坑速记」的更正：
+`CONFIG_SYSLOG_DEFAULT=y` 会回落到控制台），这里用 `printf` 只是为了让
+时间戳和普通串口输出排在一起（并补 `#include <stdio.h>`）。
 
 > **试过但已撤回**：曾把 `sf32lb52_bt_controller_enable()` 从 `send()` 路径
 > （懒启动）提到 `sf32lb52_bt_open()` 里，想让 LCPU 启动不占用同步命令的
@@ -197,6 +197,49 @@ sf32lb52 bt tx busy: rd=00000000 wr=00040000
 `sf32lb52_host_send_packet()` 开头的 `sf32lb52_bt_wait_tx_idle()` 一看环非空
 就直接返回错误 —— 命令**根本没写进环**，所以连 Reset 都超时。
 
+### 10. `nuttx/wireless/bluetooth/{bt_att,bt_gatt,bt_conn}.c` — ATT 响应与断连路径
+
+commit `0f2ba046351`（外部 nuttx 仓库）。一次完整审计查出五个缺陷，全部
+落在「手机连上 → 开始服务发现 → 链路断开 / 整机停机」这条路径上：
+
+1. **`bt_att.c`：命令掩码算错。** 原代码
+   `#define BT_ATT_OP_CMD_MASK (BT_ATT_OP_WRITE_CMD & BT_ATT_OP_SIGNED_WRITE_CMD)`
+   即 `0x52 & 0xd2 = 0x52`，于是 `hdr->code & 0x52` 对
+   **MTU_REQ(0x02) / READ_REQ(0x0a) / READ_GROUP_REQ(0x10) / WRITE_REQ(0x12)**
+   也成立 —— 服务器要拒绝某个请求时**一个字节都不回**，对端只能等
+   自己的 GATT 超时（表现就是「正在发现服务」然后掉线）。
+   已改成精确判断两个无响应 opcode。
+2. **`bt_att.c`：`att_write_cmd()` 没剥掉 handle。** 回调拿到的是
+   `handle+value`，值整体错位两字节，短写（控制特征）长度检查不过被
+   静默丢弃。已补 `bt_buf_consume()`。
+3. **`bt_att.c`：`bt_att_create_pdu()` / `bt_att_receive()` 直接
+   解引用/断言 `conn->att`。** 断连过程中 ATT 上下文会被清空：一次
+   与断连赛跑的 notify 就是 data abort，一个在途 PDU 就是整机停机。
+   两处都改为丢弃并告警。
+4. **`bt_gatt.c`：`notify_cb()` 泄漏连接引用。** 对端不是 CONNECTED 时
+   `continue` 之前没有 `bt_conn_release()`；本工程
+   `CONFIG_BLUETOOTH_MAX_CONN=1`，泄漏一次引用意味着这块连接对象永远
+   不会被释放、对端地址永远不会清零，**下一次连接就建立不起来**。
+   顺带把 `notify_data_s.handle` 从 `uint8_t` 改成 `uint16_t`。
+5. **`bt_conn.c`：断连唤醒路径可能整机停机。**
+   `bt_conn_set_state(BT_CONN_DISCONNECTED)` 把
+   `bt_buf_alloc(BT_DUMMY,...)` 的返回值直接交给 `bt_queue_send()`，
+   缓冲池空时 `DEBUGASSERT(buf != NULL)` 直接停机；`conn_tx_kthread()`
+   对队列错误同样有 `DEBUGASSERT`。两处都改成失败即返回/告警。
+
+### 11. `vendor/sifli/chips/sf32lb52/sf32lb52_bt_adapter.c` — H2L 发送环串行化
+
+commit `c8b5269`（外部 vendor 仓库）。
+
+HCI 命令线程（`hci_tx_kthread`）和每条连接的 ACL 线程（`conn_tx_kthread`）
+都会调用 `sf32lb52_host_send_packet()`，而 host 栈的
+`bt_send()` 在调用 `bt_driver_s::send` 前后**不加锁**。该函数是
+「等环空 → 分块写」的序列，本身不是原子的：两个调用方可以把自己的
+分片交错写进共享环，LCPU 于是解析到被破坏的 HCI 流 —— 命令完成事件
+丢失、ATT 响应发不出去、链路掉线。
+
+已用 `mutex_t` 把「等空闲 + 写环 + 命令的尾部排空」整段串起来。
+
 ## 可选改动
 
 ### 2. `vendor/sifli/boards/sf32lb52/lckfb_huangshan_pi/configs/nsh/defconfig`
@@ -227,9 +270,19 @@ printf→nxmutex_wait 断言崩溃的坑）。
 - **同步命令超时是致命的**：`bt_hci_cmd_send_sync()` 的 `sync_sem` 在栈上，
   超时路径不清指针 → 迟到回包对着复用栈内存 `nxsem_post()` → 断言停机。
   已修（见“必需改动 6”），但写新代码时注意同一模式。
-- **本板 `syslog()` 是黑洞**：`CONFIG_SYSLOG=y` 但 `CONFIG_SYSLOG_CHAR` 与
-  `CONFIG_SYSLOG_CONSOLE` 都没开，没有 sink。vendor 驱动里的 `syslog(LOG_ERR,...)`
-  一直看不到输出，排障时容易误判。要可见就用 `printf`。
+- **`syslog()` 在本板是可见的（更正早前「黑洞」的说法）**：`CONFIG_SYSLOG=y`
+  且 `CONFIG_SYSLOG_DEFAULT=y`、`CONFIG_SYSLOG_DEFAULT_MASK=0xff`，NuttX 在没有
+  注册其它 channel 时会回落到 `syslog_default_write()`（即 `up_putc()`）。
+  证据：`logs/ble-crash*.txt` 里带 ANSI 颜色的
+  `WARN: skip HAL_FLASH_Init...`（`syslog(LOG_WARNING)`）和
+  `INFO: NOR MTD registered...`（`syslog(LOG_INFO)`）都打出来了。
+  这一点很关键，因为蓝牙栈的错误路径全是 `wlerr`（= `syslog(LOG_ERR)`），
+  包括 `bt_hcicore.c` 里连上时必打的一行
+  `[BT] LE_CONN_COMPLETE: status=0x?? handle=? role=? peer=??`。
+  也就是说**下一次复现只要抓串口日志，就能看到连接/断连到底发生在哪一步**，
+  不需要额外加诊断代码。
+  （`CONFIG_DEBUG_WIRELESS_INFO` 仍然必须保持关闭：那是每个包都打一行，
+  会把 1 Mbps 串口和整个栈拖死。）
 - **抓崩溃现场很有用**：`logs/ble-crash.txt` 里的 `sched_dumpstack: backtrace|N:`
   地址，配 `arm-none-eabi-addr2line -f -C -e
   cmake_out/lckfb_huangshan_pi_nsh/nuttx <addr...>` 可以直接还原调用栈。
