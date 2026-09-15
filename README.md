@@ -114,6 +114,19 @@ OPENVELA_ROOT=/path/to/openvela scripts/build_huangshan.sh
 
 演示 APK 位于 `artifacts/MoodAnchor-debug-20260915.apk`。`local.properties` 是本机 SDK 配置，已被忽略，需由每位开发者自行创建。
 
+## 演示视频
+
+| 演示内容 | 对应视频 |
+| --- | --- |
+| 黄山派手表与 Android 手机 BLE/GATT 真实连接和状态订阅 | [主演示：手表与手机连接](videos/01_watch_phone_ble_connection.mp4) |
+| 手机连接手表并确认状态 | [设备配对演示](videos/02_watch_phone_pairing.mp4) |
+| 手表确认事件后，Android 状态栏提示 | [事件通知演示](videos/03_android_event_notification.mp4) |
+| Android App 首页和手表连接入口 | [App 首页演示](videos/04_android_app_home.mp4) |
+| Android App 的事件触发与交互 | [App 事件流程演示](videos/05_android_event_flow.mp4) |
+| 情绪日历、铃声和设备状态设置 | [日历与音频设置演示](videos/06_android_calendar_and_audio.mp4) |
+
+视频与 PPT 对应关系和当前演示边界见 [videos/README.md](videos/README.md)。
+
 ### 后端与局域网演示
 
 `backend/` 可以理解为 App 与云端大语言模型之间的“安全接线员”：App 不直接保存或调用模型平台的密钥，而是向你们部署的服务发起对话请求；服务再调用 Coze 或 SiliconFlow/Qwen，并把结果回传。演示时它可运行在电脑或云服务器上；正式部署应使用 HTTPS、访问控制与限流。

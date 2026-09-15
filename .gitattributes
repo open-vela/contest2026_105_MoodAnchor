@@ -1,0 +1,2 @@
+# The primary hardware demonstration exceeds GitHub's regular 100 MB Git limit.
+videos/01_watch_phone_ble_connection.mp4 filter=lfs diff=lfs merge=lfs -text
