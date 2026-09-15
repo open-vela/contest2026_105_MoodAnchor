@@ -79,6 +79,7 @@ python backend/server.py
 - [构建与烧录](docs/BUILDING.md)
 - [补丁清单](docs/PATCHES.md)
 - [手表端实现说明](docs/WEARABLE_IMPLEMENTATION.md)
+- [IMU+EDA 模型指标与边界](docs/ALGORITHM_METRICS.md)
 - [项目交接说明](docs/HANDOVER.md)
 
 ## AI Coding 使用说明

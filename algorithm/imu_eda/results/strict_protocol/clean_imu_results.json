@@ -1,0 +1,230 @@
+{
+  "protocol_version": "clean_v1_test_exclusive_time_blocks",
+  "dataset": "PAMAP2 raw protocol wrist/hand IMU",
+  "source_subjects": [
+    101,
+    102,
+    103,
+    104,
+    105,
+    106
+  ],
+  "target_subjects": [
+    107,
+    108
+  ],
+  "window": {
+    "seconds": 2,
+    "step_seconds": 1,
+    "label_purity": 0.9,
+    "guard_seconds": 5
+  },
+  "classes": {
+    "allow": [
+      "lying",
+      "sitting",
+      "standing",
+      "watching_tv",
+      "computer_work",
+      "car_driving",
+      "vacuum_cleaning",
+      "ironing",
+      "folding_laundry",
+      "house_cleaning"
+    ],
+    "filter": [
+      "running",
+      "cycling",
+      "nordic_walking",
+      "playing_soccer",
+      "rope_jumping"
+    ],
+    "excluded_boundary": [
+      "walking",
+      "ascending_stairs",
+      "descending_stairs"
+    ]
+  },
+  "calibration": "120 s scripted low-motion proxy, robust median/MAD, excluded from feedback and blind test",
+  "global_threshold": 0.22,
+  "global_threshold_oof": {
+    "windows": 9270,
+    "accuracy": 0.8603,
+    "balanced_accuracy": 0.8741,
+    "precision": 0.653,
+    "recall": 0.9009,
+    "f1": 0.7572,
+    "tp": 2019,
+    "tn": 5956,
+    "fp": 1073,
+    "fn": 222
+  },
+  "subjects": {
+    "107": {
+      "calibration": {
+        "calibration_windows": 120,
+        "calibration_seconds": 120,
+        "feature_center": [
+          9.781408017610534,
+          0.11100385972869961,
+          10.087206776787063,
+          0.6930550856834214,
+          9.781945722018834,
+          95.68646210889105,
+          0.11481267763989354,
+          0.06931212327001587,
+          0.04149749308182227,
+          0.22075529344645595,
+          0.008047723353882931
+        ],
+        "feature_scale": [
+          0.03377482481502639,
+          0.0511574167246515,
+          0.19458391183240595,
+          0.44317832662753215,
+          0.0339727572851406,
+          0.6638558249528783,
+          0.05650571039032376,
+          0.05660411356841982,
+          0.042732634625724686,
+          0.22135067046861515,
+          0.010246109838776147
+        ]
+      },
+      "feedback_windows": 540,
+      "blind_windows": 552,
+      "personal_threshold": 0.95,
+      "feedback_metrics_used_only_for_threshold": {
+        "windows": 540,
+        "accuracy": 0.8685,
+        "balanced_accuracy": 0.8913,
+        "precision": 0.72,
+        "recall": 0.9529,
+        "f1": 0.8203,
+        "tp": 162,
+        "tn": 307,
+        "fp": 63,
+        "fn": 8
+      },
+      "blind_global_threshold": {
+        "windows": 552,
+        "accuracy": 0.8043,
+        "balanced_accuracy": 0.8568,
+        "precision": 0.6184,
+        "recall": 1.0,
+        "f1": 0.7642,
+        "tp": 175,
+        "tn": 269,
+        "fp": 108,
+        "fn": 0
+      },
+      "blind_personal_threshold": {
+        "windows": 552,
+        "accuracy": 0.9022,
+        "balanced_accuracy": 0.9238,
+        "precision": 0.7713,
+        "recall": 0.9829,
+        "f1": 0.8643,
+        "tp": 172,
+        "tn": 326,
+        "fp": 51,
+        "fn": 3
+      }
+    },
+    "108": {
+      "calibration": {
+        "calibration_windows": 120,
+        "calibration_seconds": 120,
+        "feature_center": [
+          9.68611065177404,
+          0.1917140354008667,
+          10.23748286130941,
+          1.2676474868517404,
+          9.688030649743528,
+          93.8579378712265,
+          0.10877986174762284,
+          0.10683728281462733,
+          0.07820668210723748,
+          0.3609799894980208,
+          0.020445212168344898
+        ],
+        "feature_scale": [
+          0.07375002680077891,
+          0.15850928346332926,
+          0.5451398963178768,
+          1.200777058638709,
+          0.0837209676054012,
+          1.6174544186592394,
+          0.029254785815405162,
+          0.10977399548033145,
+          0.09536729636534287,
+          0.42668765827730937,
+          0.028587801044975235
+        ]
+      },
+      "feedback_windows": 438,
+      "blind_windows": 454,
+      "personal_threshold": 0.12,
+      "feedback_metrics_used_only_for_threshold": {
+        "windows": 438,
+        "accuracy": 0.5502,
+        "balanced_accuracy": 0.6911,
+        "precision": 0.2748,
+        "recall": 0.9114,
+        "f1": 0.4223,
+        "tp": 72,
+        "tn": 169,
+        "fp": 190,
+        "fn": 7
+      },
+      "blind_global_threshold": {
+        "windows": 454,
+        "accuracy": 0.8877,
+        "balanced_accuracy": 0.9035,
+        "precision": 0.6341,
+        "recall": 0.9286,
+        "f1": 0.7536,
+        "tp": 78,
+        "tn": 325,
+        "fp": 45,
+        "fn": 6
+      },
+      "blind_personal_threshold": {
+        "windows": 454,
+        "accuracy": 0.6079,
+        "balanced_accuracy": 0.7457,
+        "precision": 0.3164,
+        "recall": 0.9643,
+        "f1": 0.4765,
+        "tp": 81,
+        "tn": 195,
+        "fp": 175,
+        "fn": 3
+      }
+    }
+  },
+  "aggregate_blind_global": {
+    "windows": 1006,
+    "accuracy": 0.8419,
+    "balanced_accuracy": 0.886,
+    "precision": 0.6232,
+    "recall": 0.9768,
+    "f1": 0.7609,
+    "tp": 253,
+    "tn": 594,
+    "fp": 153,
+    "fn": 6
+  },
+  "aggregate_blind_personalized": {
+    "windows": 1006,
+    "accuracy": 0.7694,
+    "balanced_accuracy": 0.8371,
+    "precision": 0.5282,
+    "recall": 0.9768,
+    "f1": 0.6856,
+    "tp": 253,
+    "tn": 521,
+    "fp": 226,
+    "fn": 6
+  }
+}

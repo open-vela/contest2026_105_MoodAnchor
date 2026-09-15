@@ -1,0 +1,1124 @@
+{
+  "protocol_version": "clean_v1_test_exclusive_time_blocks",
+  "raw_data_root": "E:\\WESAD\\WESAD",
+  "source_subjects": [
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9"
+  ],
+  "target_subjects": [
+    "S10",
+    "S11",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17"
+  ],
+  "window": {
+    "seconds": 5,
+    "step_seconds": 1,
+    "label_purity": 0.95,
+    "guard_seconds": 5
+  },
+  "labels": {
+    "negative": "WESAD baseline label 1",
+    "positive": "WESAD stress label 2"
+  },
+  "calibration": "first 120 seconds of baseline only; robust median/MAD; excluded from feedback/blind",
+  "fusion": {
+    "eda_weight": 0.65,
+    "bvp_weight": 0.35,
+    "weight_tuned": false
+  },
+  "global_thresholds": {
+    "bvp": 0.34,
+    "eda": 0.68,
+    "fusion_65_35": 0.68
+  },
+  "global_threshold_oof": {
+    "bvp": {
+      "windows": 14419,
+      "accuracy": 0.3708,
+      "balanced_accuracy": 0.5108,
+      "precision": 0.3589,
+      "recall": 0.9898,
+      "f1": 0.5268,
+      "tp": 5050,
+      "tn": 296,
+      "fp": 9021,
+      "fn": 52
+    },
+    "eda": {
+      "windows": 14419,
+      "accuracy": 0.8761,
+      "balanced_accuracy": 0.8334,
+      "precision": 0.9484,
+      "recall": 0.6874,
+      "f1": 0.797,
+      "tp": 3507,
+      "tn": 9126,
+      "fp": 191,
+      "fn": 1595
+    },
+    "fusion_65_35": {
+      "windows": 14419,
+      "accuracy": 0.8809,
+      "balanced_accuracy": 0.837,
+      "precision": 0.9669,
+      "recall": 0.6868,
+      "f1": 0.8031,
+      "tp": 3504,
+      "tn": 9197,
+      "fp": 120,
+      "fn": 1598
+    }
+  },
+  "subjects": {
+    "S10": {
+      "calibration": {
+        "baseline_windows": 120,
+        "bvp_center": [
+          0.06740625000000003,
+          18.358058421417013,
+          110.195,
+          -0.09799999999999995,
+          18.552276075987812,
+          2.3155642633228837,
+          2.9742142122661566
+        ],
+        "bvp_scale": [
+          1.654512103125,
+          12.270604542307375,
+          98.51876999999998,
+          7.4767518,
+          12.517084794689959,
+          0.8613720094043892,
+          1.24399377495815
+        ],
+        "eda_center": [
+          0.37882767500000003,
+          0.0025228592986443563,
+          0.010233999999999965,
+          0.0,
+          0.3788645205417561,
+          0.002289289473684196,
+          0.0032336832199780135
+        ],
+        "eda_scale": [
+          0.0021339061800000475,
+          0.001936171111958886,
+          0.007586464199999974,
+          0.0011377472400000103,
+          0.0021812240702899647,
+          0.0007985361631578909,
+          0.0011443877079765628
+        ],
+        "baseline_start_second": 93,
+        "baseline_end_second": 213
+      },
+      "feedback_windows": 875,
+      "blind_windows": 877,
+      "personal_thresholds": {
+        "bvp": 0.43,
+        "eda": 0.95,
+        "fusion_65_35": 0.8
+      },
+      "feedback_fusion_metric_used_only_for_threshold": {
+        "windows": 875,
+        "accuracy": 0.8023,
+        "balanced_accuracy": 0.8265,
+        "precision": 0.6835,
+        "recall": 0.9549,
+        "f1": 0.7967,
+        "tp": 339,
+        "tn": 363,
+        "fp": 157,
+        "fn": 16
+      },
+      "blind_global_threshold": {
+        "bvp": {
+          "windows": 877,
+          "accuracy": 0.4059,
+          "balanced_accuracy": 0.5,
+          "precision": 0.4059,
+          "recall": 1.0,
+          "f1": 0.5775,
+          "tp": 356,
+          "tn": 0,
+          "fp": 521,
+          "fn": 0
+        },
+        "eda": {
+          "windows": 877,
+          "accuracy": 0.4059,
+          "balanced_accuracy": 0.5,
+          "precision": 0.4059,
+          "recall": 1.0,
+          "f1": 0.5775,
+          "tp": 356,
+          "tn": 0,
+          "fp": 521,
+          "fn": 0
+        },
+        "fusion_65_35": {
+          "windows": 877,
+          "accuracy": 0.4219,
+          "balanced_accuracy": 0.5134,
+          "precision": 0.4125,
+          "recall": 1.0,
+          "f1": 0.5841,
+          "tp": 356,
+          "tn": 14,
+          "fp": 507,
+          "fn": 0
+        }
+      },
+      "blind_personal_threshold": {
+        "bvp": {
+          "windows": 877,
+          "accuracy": 0.5496,
+          "balanced_accuracy": 0.6067,
+          "precision": 0.4716,
+          "recall": 0.9101,
+          "f1": 0.6213,
+          "tp": 324,
+          "tn": 158,
+          "fp": 363,
+          "fn": 32
+        },
+        "eda": {
+          "windows": 877,
+          "accuracy": 0.4971,
+          "balanced_accuracy": 0.5768,
+          "precision": 0.4467,
+          "recall": 1.0,
+          "f1": 0.6175,
+          "tp": 356,
+          "tn": 80,
+          "fp": 441,
+          "fn": 0
+        },
+        "fusion_65_35": {
+          "windows": 877,
+          "accuracy": 0.5986,
+          "balanced_accuracy": 0.6488,
+          "precision": 0.5031,
+          "recall": 0.9157,
+          "f1": 0.6494,
+          "tp": 326,
+          "tn": 199,
+          "fp": 322,
+          "fn": 30
+        }
+      }
+    },
+    "S11": {
+      "calibration": {
+        "baseline_windows": 120,
+        "bvp_center": [
+          0.02034374999999971,
+          32.501536401840994,
+          117.23,
+          -0.031999999999999966,
+          32.55257257534922,
+          3.810971786833856,
+          4.960906507577967
+        ],
+        "bvp_scale": [
+          2.2902231843750007,
+          7.1339260435806775,
+          40.274829,
+          8.910426,
+          7.248209558819118,
+          0.9053852445141061,
+          1.1173900211176313
+        ],
+        "eda_center": [
+          4.76221375,
+          0.009075853387837578,
+          0.03517950000000036,
+          -0.004605199999999953,
+          4.762795499253924,
+          0.005992368421052633,
+          0.00763422891406379
+        ],
+        "eda_scale": [
+          0.1417722906600003,
+          0.004341536712007459,
+          0.018966160500000304,
+          0.002465712060000042,
+          0.1426142939413988,
+          0.0027451899631577605,
+          0.004082184812974247
+        ],
+        "baseline_start_second": 86,
+        "baseline_end_second": 206
+      },
+      "feedback_windows": 852,
+      "blind_windows": 853,
+      "personal_thresholds": {
+        "bvp": 0.1,
+        "eda": 0.1,
+        "fusion_65_35": 0.1
+      },
+      "feedback_fusion_metric_used_only_for_threshold": {
+        "windows": 852,
+        "accuracy": 0.3556,
+        "balanced_accuracy": 0.4563,
+        "precision": 0.3682,
+        "recall": 0.9127,
+        "f1": 0.5247,
+        "tp": 303,
+        "tn": 0,
+        "fp": 520,
+        "fn": 29
+      },
+      "blind_global_threshold": {
+        "bvp": {
+          "windows": 853,
+          "accuracy": 0.0176,
+          "balanced_accuracy": 0.0209,
+          "precision": 0.0227,
+          "recall": 0.036,
+          "f1": 0.0278,
+          "tp": 12,
+          "tn": 3,
+          "fp": 517,
+          "fn": 321
+        },
+        "eda": {
+          "windows": 853,
+          "accuracy": 0.7397,
+          "balanced_accuracy": 0.6688,
+          "precision": 0.9664,
+          "recall": 0.3453,
+          "f1": 0.5088,
+          "tp": 115,
+          "tn": 516,
+          "fp": 4,
+          "fn": 218
+        },
+        "fusion_65_35": {
+          "windows": 853,
+          "accuracy": 0.68,
+          "balanced_accuracy": 0.5922,
+          "precision": 0.9412,
+          "recall": 0.1922,
+          "f1": 0.3192,
+          "tp": 64,
+          "tn": 516,
+          "fp": 4,
+          "fn": 269
+        }
+      },
+      "blind_personal_threshold": {
+        "bvp": {
+          "windows": 853,
+          "accuracy": 0.3904,
+          "balanced_accuracy": 0.5,
+          "precision": 0.3904,
+          "recall": 1.0,
+          "f1": 0.5616,
+          "tp": 333,
+          "tn": 0,
+          "fp": 520,
+          "fn": 0
+        },
+        "eda": {
+          "windows": 853,
+          "accuracy": 0.8453,
+          "balanced_accuracy": 0.805,
+          "precision": 0.9718,
+          "recall": 0.6216,
+          "f1": 0.7582,
+          "tp": 207,
+          "tn": 514,
+          "fp": 6,
+          "fn": 126
+        },
+        "fusion_65_35": {
+          "windows": 853,
+          "accuracy": 0.3505,
+          "balanced_accuracy": 0.4489,
+          "precision": 0.3651,
+          "recall": 0.8979,
+          "f1": 0.5191,
+          "tp": 299,
+          "tn": 0,
+          "fp": 520,
+          "fn": 34
+        }
+      }
+    },
+    "S13": {
+      "calibration": {
+        "baseline_windows": 120,
+        "bvp_center": [
+          0.25260937500000036,
+          72.51213977149354,
+          386.59000000000003,
+          -0.175,
+          73.52602544938742,
+          6.31667711598746,
+          8.741990902424284
+        ],
+        "bvp_scale": [
+          5.444825334375,
+          48.35722012712384,
+          319.44099599999987,
+          19.613315399999998,
+          49.35820399781131,
+          3.9564505579937297,
+          6.278561041813733
+        ],
+        "eda_center": [
+          8.125098875,
+          0.041849342766139094,
+          0.15350999999999893,
+          -0.008059300000000037,
+          8.12553305236208,
+          0.0210065263157895,
+          0.02947231192117657
+        ],
+        "eda_scale": [
+          0.12337485551999824,
+          0.03984214546247638,
+          0.1460398064999986,
+          0.018018037799999984,
+          0.12336427903652704,
+          0.01866667529999982,
+          0.03003100456035956
+        ],
+        "baseline_start_second": 88,
+        "baseline_end_second": 208
+      },
+      "feedback_windows": 845,
+      "blind_windows": 846,
+      "personal_thresholds": {
+        "bvp": 0.58,
+        "eda": 0.51,
+        "fusion_65_35": 0.5
+      },
+      "feedback_fusion_metric_used_only_for_threshold": {
+        "windows": 845,
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 325,
+        "tn": 520,
+        "fp": 0,
+        "fn": 0
+      },
+      "blind_global_threshold": {
+        "bvp": {
+          "windows": 846,
+          "accuracy": 0.3842,
+          "balanced_accuracy": 0.5,
+          "precision": 0.3842,
+          "recall": 1.0,
+          "f1": 0.5551,
+          "tp": 325,
+          "tn": 0,
+          "fp": 521,
+          "fn": 0
+        },
+        "eda": {
+          "windows": 846,
+          "accuracy": 1.0,
+          "balanced_accuracy": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "tp": 325,
+          "tn": 521,
+          "fp": 0,
+          "fn": 0
+        },
+        "fusion_65_35": {
+          "windows": 846,
+          "accuracy": 1.0,
+          "balanced_accuracy": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "tp": 325,
+          "tn": 521,
+          "fp": 0,
+          "fn": 0
+        }
+      },
+      "blind_personal_threshold": {
+        "bvp": {
+          "windows": 846,
+          "accuracy": 0.6158,
+          "balanced_accuracy": 0.5093,
+          "precision": 0.5,
+          "recall": 0.0492,
+          "f1": 0.0896,
+          "tp": 16,
+          "tn": 505,
+          "fp": 16,
+          "fn": 309
+        },
+        "eda": {
+          "windows": 846,
+          "accuracy": 1.0,
+          "balanced_accuracy": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "tp": 325,
+          "tn": 521,
+          "fp": 0,
+          "fn": 0
+        },
+        "fusion_65_35": {
+          "windows": 846,
+          "accuracy": 1.0,
+          "balanced_accuracy": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "tp": 325,
+          "tn": 521,
+          "fp": 0,
+          "fn": 0
+        }
+      }
+    },
+    "S14": {
+      "calibration": {
+        "baseline_windows": 120,
+        "bvp_center": [
+          -0.219984375,
+          34.522593290791534,
+          136.99,
+          0.46499999999999986,
+          34.531939019184115,
+          3.756990595611285,
+          4.871249412737944
+        ],
+        "bvp_scale": [
+          2.739126665625,
+          8.32253796958812,
+          52.36543200000002,
+          11.0661264,
+          8.2849075459951,
+          0.9048740031347959,
+          1.1300507159655395
+        ],
+        "eda_center": [
+          0.28688270000000005,
+          0.0019054471755283382,
+          0.007676000000000016,
+          -0.000255800000000006,
+          0.2868864009547214,
+          0.0016494736842105281,
+          0.0021195573606942416
+        ],
+        "eda_scale": [
+          0.0018018408450000253,
+          0.0008655228804870978,
+          0.0037924908000000067,
+          0.0007584981600000013,
+          0.0018049686318983107,
+          0.0006489106105263018,
+          0.0009745007185186313
+        ],
+        "baseline_start_second": 26,
+        "baseline_end_second": 146
+      },
+      "feedback_windows": 850,
+      "blind_windows": 852,
+      "personal_thresholds": {
+        "bvp": 0.45,
+        "eda": 0.94,
+        "fusion_65_35": 0.77
+      },
+      "feedback_fusion_metric_used_only_for_threshold": {
+        "windows": 850,
+        "accuracy": 0.9941,
+        "balanced_accuracy": 0.9952,
+        "precision": 0.9851,
+        "recall": 1.0,
+        "f1": 0.9925,
+        "tp": 330,
+        "tn": 515,
+        "fp": 5,
+        "fn": 0
+      },
+      "blind_global_threshold": {
+        "bvp": {
+          "windows": 852,
+          "accuracy": 0.3955,
+          "balanced_accuracy": 0.5058,
+          "precision": 0.3913,
+          "recall": 1.0,
+          "f1": 0.5624,
+          "tp": 331,
+          "tn": 6,
+          "fp": 515,
+          "fn": 0
+        },
+        "eda": {
+          "windows": 852,
+          "accuracy": 0.5751,
+          "balanced_accuracy": 0.6526,
+          "precision": 0.4776,
+          "recall": 1.0,
+          "f1": 0.6465,
+          "tp": 331,
+          "tn": 159,
+          "fp": 362,
+          "fn": 0
+        },
+        "fusion_65_35": {
+          "windows": 852,
+          "accuracy": 0.6561,
+          "balanced_accuracy": 0.7188,
+          "precision": 0.5304,
+          "recall": 1.0,
+          "f1": 0.6932,
+          "tp": 331,
+          "tn": 228,
+          "fp": 293,
+          "fn": 0
+        }
+      },
+      "blind_personal_threshold": {
+        "bvp": {
+          "windows": 852,
+          "accuracy": 0.4225,
+          "balanced_accuracy": 0.3747,
+          "precision": 0.1985,
+          "recall": 0.1601,
+          "f1": 0.1773,
+          "tp": 53,
+          "tn": 307,
+          "fp": 214,
+          "fn": 278
+        },
+        "eda": {
+          "windows": 852,
+          "accuracy": 0.7101,
+          "balanced_accuracy": 0.7624,
+          "precision": 0.5729,
+          "recall": 0.997,
+          "f1": 0.7277,
+          "tp": 330,
+          "tn": 275,
+          "fp": 246,
+          "fn": 1
+        },
+        "fusion_65_35": {
+          "windows": 852,
+          "accuracy": 0.6831,
+          "balanced_accuracy": 0.726,
+          "precision": 0.5558,
+          "recall": 0.9184,
+          "f1": 0.6925,
+          "tp": 304,
+          "tn": 278,
+          "fp": 243,
+          "fn": 27
+        }
+      }
+    },
+    "S15": {
+      "calibration": {
+        "baseline_windows": 120,
+        "bvp_center": [
+          -0.08765624999999994,
+          72.67922447803585,
+          407.0,
+          0.351,
+          72.68028478408495,
+          5.5638244514106585,
+          9.820366431367525
+        ],
+        "bvp_scale": [
+          3.3546141562499985,
+          82.05790219992339,
+          486.93773100000004,
+          12.8808288,
+          81.3891879807769,
+          5.8656117742946705,
+          10.892351801212893
+        ],
+        "eda_center": [
+          0.2602742,
+          0.0018084990487087752,
+          0.007675500000000016,
+          -0.00025580000000000047,
+          0.2602807564492389,
+          0.0016496315789473704,
+          0.0022692062048180893
+        ],
+        "eda_scale": [
+          0.015078079064999956,
+          0.0006779534923805172,
+          0.0037932320999999663,
+          0.0007587946800000016,
+          0.015073103511056347,
+          0.0006489106105263301,
+          0.0009273802501174976
+        ],
+        "baseline_start_second": 110,
+        "baseline_end_second": 230
+      },
+      "feedback_windows": 854,
+      "blind_windows": 854,
+      "personal_thresholds": {
+        "bvp": 0.57,
+        "eda": 0.93,
+        "fusion_65_35": 0.79
+      },
+      "feedback_fusion_metric_used_only_for_threshold": {
+        "windows": 854,
+        "accuracy": 0.9977,
+        "balanced_accuracy": 0.9981,
+        "precision": 0.9941,
+        "recall": 1.0,
+        "f1": 0.997,
+        "tp": 336,
+        "tn": 516,
+        "fp": 2,
+        "fn": 0
+      },
+      "blind_global_threshold": {
+        "bvp": {
+          "windows": 854,
+          "accuracy": 0.3934,
+          "balanced_accuracy": 0.5,
+          "precision": 0.3934,
+          "recall": 1.0,
+          "f1": 0.5647,
+          "tp": 336,
+          "tn": 0,
+          "fp": 518,
+          "fn": 0
+        },
+        "eda": {
+          "windows": 854,
+          "accuracy": 0.4555,
+          "balanced_accuracy": 0.5512,
+          "precision": 0.4195,
+          "recall": 1.0,
+          "f1": 0.591,
+          "tp": 336,
+          "tn": 53,
+          "fp": 465,
+          "fn": 0
+        },
+        "fusion_65_35": {
+          "windows": 854,
+          "accuracy": 0.6499,
+          "balanced_accuracy": 0.7114,
+          "precision": 0.5291,
+          "recall": 1.0,
+          "f1": 0.6921,
+          "tp": 336,
+          "tn": 219,
+          "fp": 299,
+          "fn": 0
+        }
+      },
+      "blind_personal_threshold": {
+        "bvp": {
+          "windows": 854,
+          "accuracy": 0.6089,
+          "balanced_accuracy": 0.503,
+          "precision": 1.0,
+          "recall": 0.006,
+          "f1": 0.0118,
+          "tp": 2,
+          "tn": 518,
+          "fp": 0,
+          "fn": 334
+        },
+        "eda": {
+          "windows": 854,
+          "accuracy": 0.9122,
+          "balanced_accuracy": 0.9276,
+          "precision": 0.8175,
+          "recall": 1.0,
+          "f1": 0.8996,
+          "tp": 336,
+          "tn": 443,
+          "fp": 75,
+          "fn": 0
+        },
+        "fusion_65_35": {
+          "windows": 854,
+          "accuracy": 0.9426,
+          "balanced_accuracy": 0.9527,
+          "precision": 0.8727,
+          "recall": 1.0,
+          "f1": 0.932,
+          "tp": 336,
+          "tn": 469,
+          "fp": 49,
+          "fn": 0
+        }
+      }
+    },
+    "S16": {
+      "calibration": {
+        "baseline_windows": 120,
+        "bvp_center": [
+          -0.18474999999999983,
+          26.142095538729883,
+          127.82499999999999,
+          -1.002,
+          26.228398450926598,
+          2.416677115987461,
+          3.266355750579799
+        ],
+        "bvp_scale": [
+          2.3246009718749994,
+          15.429349893945389,
+          94.97535599999998,
+          7.020110999999999,
+          15.4333924242474,
+          0.9699410877742947,
+          1.314289194498101
+        ],
+        "eda_center": [
+          0.28604292500000006,
+          0.0022480269779019467,
+          0.00895600000000002,
+          -0.000255800000000006,
+          0.28607276429991546,
+          0.0018518947368421036,
+          0.002628767717551495
+        ],
+        "eda_scale": [
+          0.006164947319999959,
+          0.0011703456332257127,
+          0.0037939734000000495,
+          0.0007587946799999935,
+          0.006129251504267352,
+          0.0006491447052631552,
+          0.0008265370570639287
+        ],
+        "baseline_start_second": 99,
+        "baseline_end_second": 219
+      },
+      "feedback_windows": 849,
+      "blind_windows": 849,
+      "personal_thresholds": {
+        "bvp": 0.1,
+        "eda": 0.72,
+        "fusion_65_35": 0.69
+      },
+      "feedback_fusion_metric_used_only_for_threshold": {
+        "windows": 849,
+        "accuracy": 0.9941,
+        "balanced_accuracy": 0.9952,
+        "precision": 0.985,
+        "recall": 1.0,
+        "f1": 0.9925,
+        "tp": 329,
+        "tn": 515,
+        "fp": 5,
+        "fn": 0
+      },
+      "blind_global_threshold": {
+        "bvp": {
+          "windows": 849,
+          "accuracy": 0.3875,
+          "balanced_accuracy": 0.5,
+          "precision": 0.3875,
+          "recall": 1.0,
+          "f1": 0.5586,
+          "tp": 329,
+          "tn": 0,
+          "fp": 520,
+          "fn": 0
+        },
+        "eda": {
+          "windows": 849,
+          "accuracy": 0.8198,
+          "balanced_accuracy": 0.8529,
+          "precision": 0.6826,
+          "recall": 1.0,
+          "f1": 0.8113,
+          "tp": 329,
+          "tn": 367,
+          "fp": 153,
+          "fn": 0
+        },
+        "fusion_65_35": {
+          "windows": 849,
+          "accuracy": 0.9317,
+          "balanced_accuracy": 0.9442,
+          "precision": 0.8501,
+          "recall": 1.0,
+          "f1": 0.919,
+          "tp": 329,
+          "tn": 462,
+          "fp": 58,
+          "fn": 0
+        }
+      },
+      "blind_personal_threshold": {
+        "bvp": {
+          "windows": 849,
+          "accuracy": 0.3875,
+          "balanced_accuracy": 0.5,
+          "precision": 0.3875,
+          "recall": 1.0,
+          "f1": 0.5586,
+          "tp": 329,
+          "tn": 0,
+          "fp": 520,
+          "fn": 0
+        },
+        "eda": {
+          "windows": 849,
+          "accuracy": 0.8693,
+          "balanced_accuracy": 0.8933,
+          "precision": 0.7477,
+          "recall": 1.0,
+          "f1": 0.8557,
+          "tp": 329,
+          "tn": 409,
+          "fp": 111,
+          "fn": 0
+        },
+        "fusion_65_35": {
+          "windows": 849,
+          "accuracy": 0.9388,
+          "balanced_accuracy": 0.95,
+          "precision": 0.8635,
+          "recall": 1.0,
+          "f1": 0.9268,
+          "tp": 329,
+          "tn": 468,
+          "fp": 52,
+          "fn": 0
+        }
+      }
+    },
+    "S17": {
+      "calibration": {
+        "baseline_windows": 120,
+        "bvp_center": [
+          0.17529687500000024,
+          49.366323691367064,
+          257.935,
+          -0.8309999999999998,
+          49.806165155754044,
+          4.612351097178683,
+          5.89699580762622
+        ],
+        "bvp_scale": [
+          2.9865818718750012,
+          32.78127987535996,
+          226.12615199999996,
+          13.733323799999999,
+          32.94377772388292,
+          2.654411717868338,
+          3.6718245732300367
+        ],
+        "eda_center": [
+          1.888267725,
+          0.00744639157895133,
+          0.027507500000000018,
+          -0.002046999999999999,
+          1.8883849297898512,
+          0.005353236842105284,
+          0.00660685306142393
+        ],
+        "eda_scale": [
+          0.08538638104500032,
+          0.0055362659762263735,
+          0.019917248399999917,
+          0.001896838439999996,
+          0.08530439849189826,
+          0.0026454265894736485,
+          0.003187495181932172
+        ],
+        "baseline_start_second": 92,
+        "baseline_end_second": 212
+      },
+      "feedback_windows": 875,
+      "blind_windows": 876,
+      "personal_thresholds": {
+        "bvp": 0.5,
+        "eda": 0.1,
+        "fusion_65_35": 0.1
+      },
+      "feedback_fusion_metric_used_only_for_threshold": {
+        "windows": 875,
+        "accuracy": 0.4046,
+        "balanced_accuracy": 0.5,
+        "precision": 0.4046,
+        "recall": 1.0,
+        "f1": 0.5761,
+        "tp": 354,
+        "tn": 0,
+        "fp": 521,
+        "fn": 0
+      },
+      "blind_global_threshold": {
+        "bvp": {
+          "windows": 876,
+          "accuracy": 0.4053,
+          "balanced_accuracy": 0.5,
+          "precision": 0.4053,
+          "recall": 1.0,
+          "f1": 0.5768,
+          "tp": 355,
+          "tn": 0,
+          "fp": 521,
+          "fn": 0
+        },
+        "eda": {
+          "windows": 876,
+          "accuracy": 0.5982,
+          "balanced_accuracy": 0.5042,
+          "precision": 1.0,
+          "recall": 0.0085,
+          "f1": 0.0168,
+          "tp": 3,
+          "tn": 521,
+          "fp": 0,
+          "fn": 352
+        },
+        "fusion_65_35": {
+          "windows": 876,
+          "accuracy": 0.5982,
+          "balanced_accuracy": 0.5042,
+          "precision": 1.0,
+          "recall": 0.0085,
+          "f1": 0.0168,
+          "tp": 3,
+          "tn": 521,
+          "fp": 0,
+          "fn": 352
+        }
+      },
+      "blind_personal_threshold": {
+        "bvp": {
+          "windows": 876,
+          "accuracy": 0.605,
+          "balanced_accuracy": 0.5208,
+          "precision": 0.6,
+          "recall": 0.0761,
+          "f1": 0.135,
+          "tp": 27,
+          "tn": 503,
+          "fp": 18,
+          "fn": 328
+        },
+        "eda": {
+          "windows": 876,
+          "accuracy": 0.6027,
+          "balanced_accuracy": 0.5112,
+          "precision": 0.7692,
+          "recall": 0.0282,
+          "f1": 0.0543,
+          "tp": 10,
+          "tn": 518,
+          "fp": 3,
+          "fn": 345
+        },
+        "fusion_65_35": {
+          "windows": 876,
+          "accuracy": 0.4053,
+          "balanced_accuracy": 0.5,
+          "precision": 0.4053,
+          "recall": 1.0,
+          "f1": 0.5768,
+          "tp": 355,
+          "tn": 0,
+          "fp": 521,
+          "fn": 0
+        }
+      }
+    }
+  },
+  "aggregate_blind": {
+    "bvp_global": {
+      "windows": 6007,
+      "accuracy": 0.3418,
+      "balanced_accuracy": 0.4334,
+      "precision": 0.36,
+      "recall": 0.8643,
+      "f1": 0.5083,
+      "tp": 2044,
+      "tn": 9,
+      "fp": 3633,
+      "fn": 321
+    },
+    "eda_global": {
+      "windows": 6007,
+      "accuracy": 0.6546,
+      "balanced_accuracy": 0.6729,
+      "precision": 0.5439,
+      "recall": 0.759,
+      "f1": 0.6337,
+      "tp": 1795,
+      "tn": 2137,
+      "fp": 1505,
+      "fn": 570
+    },
+    "fusion_65_35_global": {
+      "windows": 6007,
+      "accuracy": 0.7033,
+      "balanced_accuracy": 0.7093,
+      "precision": 0.6003,
+      "recall": 0.7374,
+      "f1": 0.6619,
+      "tp": 1744,
+      "tn": 2481,
+      "fp": 1161,
+      "fn": 621
+    },
+    "bvp_personalized": {
+      "windows": 6007,
+      "accuracy": 0.5119,
+      "balanced_accuracy": 0.5025,
+      "precision": 0.3963,
+      "recall": 0.4584,
+      "f1": 0.4251,
+      "tp": 1084,
+      "tn": 1991,
+      "fp": 1651,
+      "fn": 1281
+    },
+    "eda_personalized": {
+      "windows": 6007,
+      "accuracy": 0.7746,
+      "balanced_accuracy": 0.7791,
+      "precision": 0.6822,
+      "recall": 0.8004,
+      "f1": 0.7366,
+      "tp": 1893,
+      "tn": 2760,
+      "fp": 882,
+      "fn": 472
+    },
+    "fusion_65_35_personalized": {
+      "windows": 6007,
+      "accuracy": 0.7007,
+      "balanced_accuracy": 0.7464,
+      "precision": 0.5712,
+      "recall": 0.9615,
+      "f1": 0.7167,
+      "tp": 2274,
+      "tn": 1935,
+      "fp": 1707,
+      "fn": 91
+    }
+  }
+}

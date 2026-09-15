@@ -1,0 +1,32 @@
+#include "mood_gate_model_params.h"
+
+const float g_mood_imu_mean[MOOD_IMU_FEATURES] = {
+  6.54435107f, 2.01015501f, 3.35094469f, 2.16277603f, 8.09398611f,
+  11.88439108f, 5.38205915f, 0.80941086f, 0.44537113f, 0.54094285f,
+  4.97272880f
+};
+const float g_mood_imu_scale[MOOD_IMU_FEATURES] = {
+  18.04778062f, 4.21860885f, 7.38619904f, 4.55071270f, 20.65805815f,
+  39.24230326f, 10.02497116f, 1.95433008f, 1.36179668f, 1.48030510f,
+  14.29490045f
+};
+const float g_mood_imu_weight[MOOD_IMU_FEATURES] = {
+  -1.98337211f, 6.02055783f, -2.76372065f, 0.33116127f, 1.43979901f,
+  2.52054265f, 1.32093873f, -1.60481980f, -0.16901965f, -0.41021099f,
+  -0.51398763f
+};
+const float g_mood_imu_bias = 0.15652668f;
+
+const float g_mood_eda_mean[MOOD_EDA_FEATURES] = {
+  8.52832860f, 4.68307578f, 5.14329814f, 1.03007570f, 8.43741980f,
+  2.00192714f, 1.69227927f
+};
+const float g_mood_eda_scale[MOOD_EDA_FEATURES] = {
+  35.50727691f, 22.39990615f, 25.30033890f, 18.89298761f, 35.44883143f,
+  7.08217378f, 6.01914274f
+};
+const float g_mood_eda_weight[MOOD_EDA_FEATURES] = {
+  8.79028135f, 2.28400198f, 0.76996633f, 2.54154038f, 7.62405763f,
+  3.34552854f, -2.35484572f
+};
+const float g_mood_eda_bias = 5.03554515f;

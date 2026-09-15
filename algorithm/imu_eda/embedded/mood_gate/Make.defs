@@ -1,0 +1,3 @@
+ifneq ($(CONFIG_EXAMPLES_MOOD_GATE),)
+CONFIGURED_APPS += $(APPDIR)/examples/mood_gate
+endif

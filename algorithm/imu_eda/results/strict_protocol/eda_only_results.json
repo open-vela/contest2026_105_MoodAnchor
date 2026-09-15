@@ -1,0 +1,506 @@
+{
+  "protocol_version": "eda_only_clean_v1_test_exclusive_time_blocks",
+  "raw_data_root": "E:\\WESAD\\WESAD",
+  "source_subjects": [
+    "S2",
+    "S3",
+    "S4",
+    "S5",
+    "S6",
+    "S7",
+    "S8",
+    "S9"
+  ],
+  "target_subjects": [
+    "S10",
+    "S11",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17"
+  ],
+  "model": "robust personal baseline normalization + global class-balanced logistic regression",
+  "window": {
+    "seconds": 5,
+    "step_seconds": 1,
+    "label_purity": 0.95,
+    "guard_seconds": 5
+  },
+  "calibration": "first 120 seconds of first labelled baseline, excluded from feedback and blind test",
+  "global_threshold": 0.68,
+  "global_threshold_oof": {
+    "windows": 14419,
+    "accuracy": 0.8761,
+    "balanced_accuracy": 0.8334,
+    "precision": 0.9484,
+    "recall": 0.6874,
+    "f1": 0.797,
+    "tp": 3507,
+    "tn": 9126,
+    "fp": 191,
+    "fn": 1595
+  },
+  "subjects": {
+    "S10": {
+      "calibration": {
+        "baseline_start_second": 93,
+        "baseline_end_second": 213,
+        "baseline_windows": 120,
+        "center": [
+          0.37882767500000003,
+          0.0025228592986443563,
+          0.010233999999999965,
+          0.0,
+          0.3788645205417561,
+          0.002289289473684196,
+          0.0032336832199780135
+        ],
+        "scale": [
+          0.0021339061800000475,
+          0.001936171111958886,
+          0.007586464199999974,
+          0.0011377472400000103,
+          0.0021812240702899647,
+          0.0007985361631578909,
+          0.0011443877079765628
+        ]
+      },
+      "feedback_windows": 875,
+      "blind_windows": 877,
+      "personal_threshold": 0.95,
+      "feedback_metrics_used_only_for_threshold": {
+        "windows": 875,
+        "accuracy": 0.6983,
+        "balanced_accuracy": 0.7462,
+        "precision": 0.5735,
+        "recall": 1.0,
+        "f1": 0.729,
+        "tp": 355,
+        "tn": 256,
+        "fp": 264,
+        "fn": 0
+      },
+      "blind_global_threshold": {
+        "windows": 877,
+        "accuracy": 0.4059,
+        "balanced_accuracy": 0.5,
+        "precision": 0.4059,
+        "recall": 1.0,
+        "f1": 0.5775,
+        "tp": 356,
+        "tn": 0,
+        "fp": 521,
+        "fn": 0
+      },
+      "blind_personal_threshold": {
+        "windows": 877,
+        "accuracy": 0.4971,
+        "balanced_accuracy": 0.5768,
+        "precision": 0.4467,
+        "recall": 1.0,
+        "f1": 0.6175,
+        "tp": 356,
+        "tn": 80,
+        "fp": 441,
+        "fn": 0
+      }
+    },
+    "S11": {
+      "calibration": {
+        "baseline_start_second": 86,
+        "baseline_end_second": 206,
+        "baseline_windows": 120,
+        "center": [
+          4.76221375,
+          0.009075853387837578,
+          0.03517950000000036,
+          -0.004605199999999953,
+          4.762795499253924,
+          0.005992368421052633,
+          0.00763422891406379
+        ],
+        "scale": [
+          0.1417722906600003,
+          0.004341536712007459,
+          0.018966160500000304,
+          0.002465712060000042,
+          0.1426142939413988,
+          0.0027451899631577605,
+          0.004082184812974247
+        ]
+      },
+      "feedback_windows": 852,
+      "blind_windows": 853,
+      "personal_threshold": 0.1,
+      "feedback_metrics_used_only_for_threshold": {
+        "windows": 852,
+        "accuracy": 0.5845,
+        "balanced_accuracy": 0.5191,
+        "precision": 0.4353,
+        "recall": 0.2229,
+        "f1": 0.2948,
+        "tp": 74,
+        "tn": 424,
+        "fp": 96,
+        "fn": 258
+      },
+      "blind_global_threshold": {
+        "windows": 853,
+        "accuracy": 0.7397,
+        "balanced_accuracy": 0.6688,
+        "precision": 0.9664,
+        "recall": 0.3453,
+        "f1": 0.5088,
+        "tp": 115,
+        "tn": 516,
+        "fp": 4,
+        "fn": 218
+      },
+      "blind_personal_threshold": {
+        "windows": 853,
+        "accuracy": 0.8453,
+        "balanced_accuracy": 0.805,
+        "precision": 0.9718,
+        "recall": 0.6216,
+        "f1": 0.7582,
+        "tp": 207,
+        "tn": 514,
+        "fp": 6,
+        "fn": 126
+      }
+    },
+    "S13": {
+      "calibration": {
+        "baseline_start_second": 88,
+        "baseline_end_second": 208,
+        "baseline_windows": 120,
+        "center": [
+          8.125098875,
+          0.041849342766139094,
+          0.15350999999999893,
+          -0.008059300000000037,
+          8.12553305236208,
+          0.0210065263157895,
+          0.02947231192117657
+        ],
+        "scale": [
+          0.12337485551999824,
+          0.03984214546247638,
+          0.1460398064999986,
+          0.018018037799999984,
+          0.12336427903652704,
+          0.01866667529999982,
+          0.03003100456035956
+        ]
+      },
+      "feedback_windows": 845,
+      "blind_windows": 846,
+      "personal_threshold": 0.51,
+      "feedback_metrics_used_only_for_threshold": {
+        "windows": 845,
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 325,
+        "tn": 520,
+        "fp": 0,
+        "fn": 0
+      },
+      "blind_global_threshold": {
+        "windows": 846,
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 325,
+        "tn": 521,
+        "fp": 0,
+        "fn": 0
+      },
+      "blind_personal_threshold": {
+        "windows": 846,
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "tp": 325,
+        "tn": 521,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    "S14": {
+      "calibration": {
+        "baseline_start_second": 26,
+        "baseline_end_second": 146,
+        "baseline_windows": 120,
+        "center": [
+          0.28688270000000005,
+          0.0019054471755283382,
+          0.007676000000000016,
+          -0.000255800000000006,
+          0.2868864009547214,
+          0.0016494736842105281,
+          0.0021195573606942416
+        ],
+        "scale": [
+          0.0018018408450000253,
+          0.0008655228804870978,
+          0.0037924908000000067,
+          0.0007584981600000013,
+          0.0018049686318983107,
+          0.0006489106105263018,
+          0.0009745007185186313
+        ]
+      },
+      "feedback_windows": 850,
+      "blind_windows": 852,
+      "personal_threshold": 0.94,
+      "feedback_metrics_used_only_for_threshold": {
+        "windows": 850,
+        "accuracy": 0.9941,
+        "balanced_accuracy": 0.9952,
+        "precision": 0.9851,
+        "recall": 1.0,
+        "f1": 0.9925,
+        "tp": 330,
+        "tn": 515,
+        "fp": 5,
+        "fn": 0
+      },
+      "blind_global_threshold": {
+        "windows": 852,
+        "accuracy": 0.5751,
+        "balanced_accuracy": 0.6526,
+        "precision": 0.4776,
+        "recall": 1.0,
+        "f1": 0.6465,
+        "tp": 331,
+        "tn": 159,
+        "fp": 362,
+        "fn": 0
+      },
+      "blind_personal_threshold": {
+        "windows": 852,
+        "accuracy": 0.7101,
+        "balanced_accuracy": 0.7624,
+        "precision": 0.5729,
+        "recall": 0.997,
+        "f1": 0.7277,
+        "tp": 330,
+        "tn": 275,
+        "fp": 246,
+        "fn": 1
+      }
+    },
+    "S15": {
+      "calibration": {
+        "baseline_start_second": 110,
+        "baseline_end_second": 230,
+        "baseline_windows": 120,
+        "center": [
+          0.2602742,
+          0.0018084990487087752,
+          0.007675500000000016,
+          -0.00025580000000000047,
+          0.2602807564492389,
+          0.0016496315789473704,
+          0.0022692062048180893
+        ],
+        "scale": [
+          0.015078079064999956,
+          0.0006779534923805172,
+          0.0037932320999999663,
+          0.0007587946800000016,
+          0.015073103511056347,
+          0.0006489106105263301,
+          0.0009273802501174976
+        ]
+      },
+      "feedback_windows": 854,
+      "blind_windows": 854,
+      "personal_threshold": 0.93,
+      "feedback_metrics_used_only_for_threshold": {
+        "windows": 854,
+        "accuracy": 0.9977,
+        "balanced_accuracy": 0.9981,
+        "precision": 0.9941,
+        "recall": 1.0,
+        "f1": 0.997,
+        "tp": 336,
+        "tn": 516,
+        "fp": 2,
+        "fn": 0
+      },
+      "blind_global_threshold": {
+        "windows": 854,
+        "accuracy": 0.4555,
+        "balanced_accuracy": 0.5512,
+        "precision": 0.4195,
+        "recall": 1.0,
+        "f1": 0.591,
+        "tp": 336,
+        "tn": 53,
+        "fp": 465,
+        "fn": 0
+      },
+      "blind_personal_threshold": {
+        "windows": 854,
+        "accuracy": 0.9122,
+        "balanced_accuracy": 0.9276,
+        "precision": 0.8175,
+        "recall": 1.0,
+        "f1": 0.8996,
+        "tp": 336,
+        "tn": 443,
+        "fp": 75,
+        "fn": 0
+      }
+    },
+    "S16": {
+      "calibration": {
+        "baseline_start_second": 99,
+        "baseline_end_second": 219,
+        "baseline_windows": 120,
+        "center": [
+          0.28604292500000006,
+          0.0022480269779019467,
+          0.00895600000000002,
+          -0.000255800000000006,
+          0.28607276429991546,
+          0.0018518947368421036,
+          0.002628767717551495
+        ],
+        "scale": [
+          0.006164947319999959,
+          0.0011703456332257127,
+          0.0037939734000000495,
+          0.0007587946799999935,
+          0.006129251504267352,
+          0.0006491447052631552,
+          0.0008265370570639287
+        ]
+      },
+      "feedback_windows": 849,
+      "blind_windows": 849,
+      "personal_threshold": 0.72,
+      "feedback_metrics_used_only_for_threshold": {
+        "windows": 849,
+        "accuracy": 0.9941,
+        "balanced_accuracy": 0.9952,
+        "precision": 0.985,
+        "recall": 1.0,
+        "f1": 0.9925,
+        "tp": 329,
+        "tn": 515,
+        "fp": 5,
+        "fn": 0
+      },
+      "blind_global_threshold": {
+        "windows": 849,
+        "accuracy": 0.8198,
+        "balanced_accuracy": 0.8529,
+        "precision": 0.6826,
+        "recall": 1.0,
+        "f1": 0.8113,
+        "tp": 329,
+        "tn": 367,
+        "fp": 153,
+        "fn": 0
+      },
+      "blind_personal_threshold": {
+        "windows": 849,
+        "accuracy": 0.8693,
+        "balanced_accuracy": 0.8933,
+        "precision": 0.7477,
+        "recall": 1.0,
+        "f1": 0.8557,
+        "tp": 329,
+        "tn": 409,
+        "fp": 111,
+        "fn": 0
+      }
+    },
+    "S17": {
+      "calibration": {
+        "baseline_start_second": 92,
+        "baseline_end_second": 212,
+        "baseline_windows": 120,
+        "center": [
+          1.888267725,
+          0.00744639157895133,
+          0.027507500000000018,
+          -0.002046999999999999,
+          1.8883849297898512,
+          0.005353236842105284,
+          0.00660685306142393
+        ],
+        "scale": [
+          0.08538638104500032,
+          0.0055362659762263735,
+          0.019917248399999917,
+          0.001896838439999996,
+          0.08530439849189826,
+          0.0026454265894736485,
+          0.003187495181932172
+        ]
+      },
+      "feedback_windows": 875,
+      "blind_windows": 876,
+      "personal_threshold": 0.1,
+      "feedback_metrics_used_only_for_threshold": {
+        "windows": 875,
+        "accuracy": 0.3291,
+        "balanced_accuracy": 0.2764,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "tp": 0,
+        "tn": 288,
+        "fp": 233,
+        "fn": 354
+      },
+      "blind_global_threshold": {
+        "windows": 876,
+        "accuracy": 0.5982,
+        "balanced_accuracy": 0.5042,
+        "precision": 1.0,
+        "recall": 0.0085,
+        "f1": 0.0168,
+        "tp": 3,
+        "tn": 521,
+        "fp": 0,
+        "fn": 352
+      },
+      "blind_personal_threshold": {
+        "windows": 876,
+        "accuracy": 0.6027,
+        "balanced_accuracy": 0.5112,
+        "precision": 0.7692,
+        "recall": 0.0282,
+        "f1": 0.0543,
+        "tp": 10,
+        "tn": 518,
+        "fp": 3,
+        "fn": 345
+      }
+    }
+  },
+  "aggregate_personalized_blind": {
+    "windows": 6007,
+    "accuracy": 0.7746,
+    "balanced_accuracy": 0.7791,
+    "precision": 0.6822,
+    "recall": 0.8004,
+    "f1": 0.7366,
+    "tp": 1893,
+    "tn": 2760,
+    "fp": 882,
+    "fn": 472
+  }
+}

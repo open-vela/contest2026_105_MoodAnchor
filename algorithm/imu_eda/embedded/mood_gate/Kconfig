@@ -1,0 +1,31 @@
+config EXAMPLES_MOOD_GATE
+	tristate "MoodAnchor IMU + EDA serial gate"
+	default n
+	depends on ADC
+	help
+		Compile the on-device MoodAnchor serial inference prototype.
+		A low-motion IMU window permits EDA scoring; an EDA-positive window
+		confirms an event. The IMU device driver remains board/sensor-specific.
+
+if EXAMPLES_MOOD_GATE
+
+config EXAMPLES_MOOD_GATE_PROGNAME
+	string "Program name"
+	default "mood_gate"
+
+config EXAMPLES_MOOD_GATE_PRIORITY
+	int "Task priority"
+	default 100
+
+config EXAMPLES_MOOD_GATE_STACKSIZE
+	int "Task stack size"
+	default 16384
+
+config EXAMPLES_MOOD_GATE_EDA_ADC_CHANNEL
+	int "EDA ADC channel"
+	default 0
+	help
+		ADC channel wired to the external skin-conductance front-end. This is
+		not the microphone ADC input.
+
+endif
