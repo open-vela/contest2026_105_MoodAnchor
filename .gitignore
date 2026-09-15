@@ -1,0 +1,69 @@
+# Keep the competition-required AI Coding logs under logs/ tracked.
+# Never place actual credentials in this repository.
+
+# Secrets and machine-specific configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials/
+local.properties
+**/local.properties
+
+# Android Studio / Gradle outputs and local IDE settings
+.gradle/
+.gradle-user-home/
+.idea/
+*.iml
+**/build/
+*.apk
+*.aab
+*.ap_
+*.dex
+# Deliberately retain the single review/demo APK after copying it here.
+!artifacts/MoodAnchor-debug-20260915.apk
+
+# Python virtual environments, bytecode, test and runtime cache
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Native/openvela build outputs
+build/
+out/
+*.o
+*.a
+*.so
+*.elf
+*.hex
+*.map
+
+# Generated data, model checkpoints, and raw datasets
+data/
+datasets/
+*.zip
+*.pkl
+*.pt
+*.pth
+*.onnx
+# Keep small, committed model assets and evaluation summaries under algorithm/.
+!algorithm/**/model/*.pkl
+!algorithm/**/model/*.h
+!algorithm/**/results/*.json
+
+# Runtime logs; do not ignore logs/ because the contest requires AI Coding logs.
+*.log
+*.err.log
+
+# OS and editor temporary files
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
