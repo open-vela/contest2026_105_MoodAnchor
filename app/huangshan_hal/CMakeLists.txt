@@ -14,7 +14,7 @@ if(CONFIG_LVX_USE_HUANGSHAN_HAL)
   nuttx_add_application(
     NAME huangshan_hal_demo
     SRCS huangshan_hal.c huangshan_hal_demo.c hs_ble_host.c hs_ble_gatt.c
-         hs_ppg.c hs_mic.c hs_mood.c
+         hs_mic.c hs_mood.c
     STACKSIZE 4096)
 
   target_include_directories(apps_huangshan_hal_demo PRIVATE
@@ -31,7 +31,7 @@ if(CONFIG_LVX_USE_DEMO_MOOD_ANCHOR)
     MODULE ${CONFIG_LVX_USE_DEMO_MOOD_ANCHOR}
     DEPENDS lvgl
     SRCS mood_anchor_main.c huangshan_hal.c hs_ble_host.c hs_ble_gatt.c
-         hs_ppg.c hs_mic.c hs_mood.c)
+         hs_mic.c hs_mood.c)
 
   target_include_directories(apps_mood_anchor PRIVATE ${HS_HAL_INCLUDE_DIRS})
 endif()

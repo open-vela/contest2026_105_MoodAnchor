@@ -10,11 +10,17 @@
  *
  *   lv_init() -> lv_nuttx_dsc_init() -> lv_nuttx_init() -> lv_nuttx_uv_loop()
  *
- * The three pages show the MoodAnchor sensor set:
+ * The pages show the MoodAnchor sensor set:
  *
  *   MOOD   : skin conductance (GSR / PA28 per /dev/adc1) + mood index
- *   VITALS : heart rate and SpO2 (MAX30102 on /dev/i2c1 @0x57)
  *   MOTION : accelerometer / gyroscope / temperature (LSM6DSL on /dev/i2c1)
+ *   SOUND  : microphone loudness
+ *
+ * The optical heart-rate / SpO2 module is no longer part of the design; the
+ * skin conductance electrode is the only external sensor.
+ *
+ * The on-board key (KEY2) fakes an emotion change so the phone side can be
+ * exercised without real sensor input.
  *
  * Sensor access goes through the existing huangshan_hal C library, so the
  * data path stays in native code.
@@ -50,7 +56,6 @@
 
 #include "huangshan_hal.h"
 #include "hs_ble.h"
-#include "hs_ppg.h"
 #include "hs_mic.h"
 #include "hs_mood.h"
 
@@ -66,11 +71,10 @@
 #define MA_PAGE_SYSTEM     0
 #define MA_PAGE_BLE        1
 #define MA_PAGE_GSR        2
-#define MA_PAGE_PPG        3
-#define MA_PAGE_IMU        4
-#define MA_PAGE_MIC        5
-#define MA_PAGE_TUNE       6
-#define MA_PAGE_COUNT      7
+#define MA_PAGE_IMU        3
+#define MA_PAGE_MIC        4
+#define MA_PAGE_TUNE       5
+#define MA_PAGE_COUNT      6
 
 #define MA_REFRESH_MS      500
 
@@ -182,12 +186,6 @@ static volatile bool g_mic_ok;
 
 static volatile int32_t g_vbat_mv;
 
-/* Vitals page */
-
-static lv_obj_t *g_lbl_hr;
-static lv_obj_t *g_lbl_spo2;
-static lv_obj_t *g_lbl_vitals_note;
-
 /* Motion page */
 
 static lv_obj_t *g_lbl_accel;
@@ -227,16 +225,12 @@ static pthread_t              g_mood_thread;
 
 static struct hs_gsr_s      g_gsr;
 static struct hs_imu_s      g_imu;
-static struct hs_max30102_s g_max;
 static struct hs_adc_s      g_batt;
-static struct hs_vibration_s g_vib;
 static struct hs_buttons_s  g_btn;
 
 static bool g_gsr_open;
 static bool g_imu_open;
-static bool g_max_open;
 static bool g_batt_open;
-static bool g_vib_open;
 static bool g_btn_open;
 
 /* Latest IMU sample.  hs_imu_read() blocks inside the driver until the sensor
@@ -250,25 +244,6 @@ static struct hs_imu_sample_s g_imu_sample;
 static volatile bool          g_imu_valid;
 static pthread_mutex_t        g_imu_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t              g_imu_thread;
-
-/* PPG pipeline.  The MAX30102 produces 100 samples per second and needs to
- * be drained at that rate for the beat detector to see the pulse waveform,
- * which the 2 Hz UI timer can never do.  A dedicated thread therefore owns
- * the sensor and the algorithm; the UI and the BLE data thread only read the
- * published results.
- */
-
-#define MA_PPG_ABSENT   0       /* sensor not on the bus */
-#define MA_PPG_WAITING  1       /* present, no usable pulse yet */
-#define MA_PPG_OK       2       /* measuring */
-
-static struct hs_ppg_s  g_ppg;
-static volatile bool    g_ppg_run;
-static volatile int     g_ppg_state = MA_PPG_ABSENT;
-static volatile int     g_ppg_hr;
-static volatile int     g_ppg_spo2;
-static volatile int     g_ppg_quality;
-static pthread_t        g_ppg_thread;
 
 /* Battery sampling worker -------------------------------------------------
  *
@@ -315,22 +290,32 @@ static volatile int32_t g_gsr_rest;           /* baseline, 0 = unset */
 static volatile int32_t g_gsr_band = MA_GSR_BAND_DEFAULT;
 static volatile int     g_gsr_class = MA_GSR_NO_ELECTRODE;
 
-static uint32_t g_hr_bpm;
-static uint32_t g_spo2;
-static bool     g_vitals_valid;
-
 /* Latest samples published to BLE (written by the LVGL thread, read by the
  * BLE data thread; plain volatiles are enough for these scalars).
  */
 
 static volatile int32_t  g_ble_gsr_mv;
 static volatile uint8_t  g_ble_gsr_ok;
-static volatile uint8_t  g_ble_hr;
-static volatile uint8_t  g_ble_spo2;
-static volatile uint8_t  g_ble_vitals_ok;
 
 static bool        g_ble_data_run;
 static pthread_t   g_ble_thread;
+
+/* Bench trigger: pressing the on-board key fakes an emotion change so the
+ * phone side can be exercised without real sensor input.  The override is
+ * armed for a few seconds, then the real fused verdict takes over again.
+ * Written by the key thread, expired by the UI timer, read by the BLE data
+ * thread; plain volatiles are enough for these scalars.
+ */
+
+#define MA_SIM_MOOD_HOLD_MS   10000
+#define MA_SIM_MOOD_TICKS     (MA_SIM_MOOD_HOLD_MS / MA_REFRESH_MS)
+
+static volatile bool     g_sim_mood_active;
+static volatile bool     g_sim_mood_agitated;
+static volatile uint8_t  g_sim_mood_confidence;
+static volatile int      g_sim_mood_ticks;
+static volatile unsigned g_sim_mood_seq;
+static pthread_t         g_key_thread;
 
 /* BLE bring-up state machine driven by the on-screen switch */
 
@@ -347,6 +332,7 @@ static pthread_t    g_ble_start_thread;
 
 static void ma_ble_start_async(void);
 static void ma_ble_stop(void);
+static void ma_sim_emotion_trigger(void);
 
 static void ma_mood_prompt(void);
 
@@ -585,36 +571,6 @@ static void ma_build_mood_page(lv_obj_t *tile)
   lv_obj_set_style_text_font(g_lbl_mood_state, &lv_font_montserrat_16, 0);
   lv_obj_align(g_lbl_mood_state, LV_ALIGN_TOP_MID, 0, 386);
   lv_label_set_text(g_lbl_mood_state, "Capture while calm");
-}
-
-/****************************************************************************
- * Name: ma_build_vitals_page
- ****************************************************************************/
-
-static void ma_build_vitals_page(lv_obj_t *tile)
-{
-  lv_obj_t *card;
-
-  ma_create_page_header(tile, "VITALS");
-
-  card = ma_create_card(tile, 130);
-  lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 44);
-  ma_create_caption(card, "Heart rate");
-  g_lbl_hr = ma_create_value(card, "-- bpm", &lv_font_montserrat_48,
-                             MA_COLOR_TEXT);
-  lv_obj_set_style_text_color(g_lbl_hr, lv_color_hex(0xff6b81), 0);
-
-  card = ma_create_card(tile, 130);
-  lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 186);
-  ma_create_caption(card, "Blood oxygen");
-  g_lbl_spo2 = ma_create_value(card, "-- %", &lv_font_montserrat_48,
-                               MA_COLOR_ACCENT);
-
-  g_lbl_vitals_note = lv_label_create(tile);
-  lv_obj_set_style_text_color(g_lbl_vitals_note, lv_color_hex(MA_COLOR_MUTED),
-                              0);
-  lv_obj_align(g_lbl_vitals_note, LV_ALIGN_TOP_MID, 0, 328);
-  lv_label_set_text(g_lbl_vitals_note, "MAX30102 on /dev/i2c1 @0x57");
 }
 
 /****************************************************************************
@@ -1713,19 +1669,15 @@ static void ma_read_system(void)
 
   snprintf(buf, sizeof(buf),
            "GSR     %-8s %s\n"
-           "PPG     %-8s %s\n"
            "IMU     %-8s %s\n"
            "BUTTON  %-8s %s\n"
-           "MOTOR   %-8s %s\n"
            "TOUCH   %-8s %s",
            "adc1", ma_state_text(ma_node_present(HS_ADC_GSR_DEVICE),
                                  g_gsr_valid),
-           "i2c1", ma_state_text(true, g_ppg_state == MA_PPG_OK),
            "lsm6d", ma_state_text(ma_node_present("/dev/lsm6dsl0"),
                                   g_imu_open),
            "btn", ma_state_text(ma_node_present(HS_BUTTONS_DEVICE),
                                 g_btn_open),
-           "gpio3", ma_state_text(ma_node_present("/dev/gpio3"), false),
            "input0", ma_state_text(ma_node_present("/dev/input0"), true));
 
   if (strcmp(buf, last_list) != 0)
@@ -2010,63 +1962,6 @@ static void ma_gsr_band_event(lv_event_t *event)
 }
 
 /****************************************************************************
- * Name: ma_read_vitals
- ****************************************************************************/
-
-static void ma_read_vitals(void)
-{
-  static int last_state = -1;
-  static int last_hr;
-  static int last_spo2;
-  static int last_quality;
-  int        state   = g_ppg_state;
-  int        hr      = g_ppg_hr;
-  int        spo2    = g_ppg_spo2;
-  int        quality = g_ppg_quality;
-
-  /* The labels are only there to mirror the pipeline state; the numbers
-   * themselves are computed by ma_ppg_thread().
-   */
-
-  if (state == last_state && hr == last_hr && spo2 == last_spo2 &&
-      quality == last_quality)
-    {
-      return;
-    }
-
-  last_state   = state;
-  last_hr      = hr;
-  last_spo2    = spo2;
-  last_quality = quality;
-
-  if (state == MA_PPG_ABSENT)
-    {
-      lv_label_set_text(g_lbl_hr, "-- bpm");
-      lv_label_set_text(g_lbl_spo2, "-- %");
-      lv_label_set_text(g_lbl_vitals_note,
-                        "MAX30102: not detected on /dev/i2c1");
-      return;
-    }
-
-  g_hr_bpm = (uint32_t)hr;
-  g_spo2   = (uint32_t)spo2;
-  g_vitals_valid = (state == MA_PPG_OK);
-
-  if (state != MA_PPG_OK)
-    {
-      lv_label_set_text(g_lbl_hr, "-- bpm");
-      lv_label_set_text(g_lbl_spo2, "-- %");
-      lv_label_set_text(g_lbl_vitals_note,
-                        "Place a finger on the sensor");
-      return;
-    }
-
-  lv_label_set_text_fmt(g_lbl_hr, "%d bpm", hr);
-  lv_label_set_text_fmt(g_lbl_spo2, "%d %%", spo2);
-  lv_label_set_text_fmt(g_lbl_vitals_note, "pulse signal %d %%", quality);
-}
-
-/****************************************************************************
  * Name: ma_read_motion
  ****************************************************************************/
 
@@ -2128,6 +2023,16 @@ static void ma_refresh_timer(lv_timer_t *timer)
       printf("[ui] %lu\n", (unsigned long)ui_tick);
     }
 
+  /* Expire the key trigger's faked verdict.  This runs on the UI timer
+   * rather than on the BLE data thread so the override does not stay armed
+   * forever when Bluetooth is switched off.
+   */
+
+  if (g_sim_mood_active && --g_sim_mood_ticks <= 0)
+    {
+      g_sim_mood_active = false;
+    }
+
   ma_refresh_ble_ui();
   ma_mood_prompt();
 
@@ -2140,10 +2045,6 @@ static void ma_refresh_timer(lv_timer_t *timer)
       ma_read_gsr();
       ma_read_fusion();
     }
-  else if (tile == g_tiles[MA_PAGE_PPG])
-    {
-      ma_read_vitals();
-    }
   else if (tile == g_tiles[MA_PAGE_IMU])
     {
       ma_read_motion();
@@ -2152,154 +2053,6 @@ static void ma_refresh_timer(lv_timer_t *timer)
     {
       ma_read_tuning();
     }
-}
-
-/****************************************************************************
- * Name: ma_ppg_thread
- *
- * Description:
- *   Drain the MAX30102 FIFO and run the PPG analysis.  The sensor produces
- *   100 samples per second, so the loop polls it every few milliseconds and
- *   pushes every sample it finds into the tracker; the results are published
- *   at a much lower rate, which is all a label or a BLE notification needs.
- *
- ****************************************************************************/
-
-static FAR void *ma_ppg_thread(FAR void *arg)
-{
-  struct hs_max30102_sample_s sample;
-  uint32_t published = 0;
-
-  (void)arg;
-
-  while (g_ppg_run)
-    {
-      int drained = 0;
-      int ret;
-
-      if (!g_max_open)
-        {
-          if (hs_max30102_open(&g_max, HS_MAX30102_I2C_BUS) < 0)
-            {
-              g_ppg_state = MA_PPG_ABSENT;
-              sleep(5);
-              continue;
-            }
-
-          g_max_open  = true;
-          g_ppg_state = MA_PPG_WAITING;
-          hs_ppg_reset(&g_ppg);
-          published   = 0;
-        }
-
-      /* Take everything the FIFO has to offer, but never more than a few
-       * samples per pass so a burst cannot lock the thread up.
-       */
-
-      while (g_ppg_run && drained < 4)
-        {
-          ret = hs_max30102_read_sample(&g_max, &sample);
-
-          if (ret == -EAGAIN)
-            {
-              break;                    /* FIFO empty: the normal idle case */
-            }
-
-          if (ret < 0)
-            {
-              /* I2C trouble: drop the handle and rebuild it from scratch
-               * rather than spinning on a dead bus.
-               */
-
-              hs_max30102_close(&g_max);
-              g_max_open  = false;
-              g_ppg_state = MA_PPG_ABSENT;
-              break;
-            }
-
-          hs_ppg_push(&g_ppg, sample.timestamp_ms, sample.red, sample.ir);
-          drained++;
-        }
-
-      /* Publish about twice per second: the UI timer runs at 2 Hz, so a
-       * faster rate would only churn the labels.
-       */
-
-      if (g_ppg.samples - published >= HS_PPG_SAMPLE_HZ / 2)
-        {
-          int hr = hs_ppg_heart_rate(&g_ppg);
-
-          published = g_ppg.samples;
-
-          if (hr > 0)
-            {
-              g_ppg_hr      = hr;
-              g_ppg_spo2    = hs_ppg_spo2(&g_ppg);
-              g_ppg_quality = hs_ppg_quality(&g_ppg);
-              g_ppg_state   = MA_PPG_OK;
-
-              /* Feed the BLE characteristics from here so a phone keeps
-               * receiving vitals while the VITALS page is not shown.
-               */
-
-              g_ble_hr        = (uint8_t)hr;
-              g_ble_spo2      = (uint8_t)g_ppg_spo2;
-              g_ble_vitals_ok = 1;
-            }
-          else if (g_ppg.samples > HS_PPG_SAMPLE_HZ * 3)
-            {
-              /* Long enough for a finger to be placed: report "no signal"
-               * instead of holding on to a stale reading.
-               */
-
-              g_ppg_hr        = 0;
-              g_ppg_spo2      = 0;
-              g_ppg_quality   = 0;
-              g_ppg_state     = MA_PPG_WAITING;
-              g_ble_vitals_ok = 0;
-            }
-        }
-
-      usleep(10000);
-    }
-
-  if (g_max_open)
-    {
-      hs_max30102_close(&g_max);
-      g_max_open = false;
-    }
-
-  return NULL;
-}
-
-/****************************************************************************
- * Name: ma_ppg_start
- *
- * Description:
- *   Spawn the PPG worker.  It runs at the default priority on purpose: the
- *   sensor polling is light and must never starve the render thread.
- *
- ****************************************************************************/
-
-static void ma_ppg_start(void)
-{
-  pthread_attr_t attr;
-
-  g_ppg_run = true;
-
-  if (pthread_attr_init(&attr) != 0)
-    {
-      return;
-    }
-
-  pthread_attr_setstacksize(&attr, 4096);
-
-  if (pthread_create(&g_ppg_thread, &attr, ma_ppg_thread, NULL) == 0)
-    {
-      pthread_detach(g_ppg_thread);
-    }
-
-  pthread_attr_destroy(&attr);
 }
 
 static void ma_mood_prompt(void);
@@ -2544,6 +2297,117 @@ static void ma_mood_prompt(void)
 }
 
 /****************************************************************************
+ * Name: ma_sim_emotion_trigger
+ *
+ * Description:
+ *   Bench trigger for the on-board key.  Flip the faked fused verdict, arm
+ *   the override for a few seconds, push one event on the event
+ *   characteristic and leave a trace on the LINK page and the console.
+ *
+ *   Runs on the key polling thread, i.e. never in the Bluetooth receive path
+ *   (hs_ble_event_notify() issues HCI commands).
+ *
+ ****************************************************************************/
+
+static void ma_sim_emotion_trigger(void)
+{
+  bool    agitated   = !g_sim_mood_agitated;
+  uint8_t confidence = agitated ? 85 : 20;
+  int     ret;
+
+  g_sim_mood_agitated   = agitated;
+  g_sim_mood_confidence = confidence;
+  g_sim_mood_ticks      = MA_SIM_MOOD_TICKS;
+  g_sim_mood_active     = true;
+  g_sim_mood_seq++;
+
+  hs_ble_stage("sim mood #%u %s %u%%", g_sim_mood_seq,
+               agitated ? "agitated" : "calm", (unsigned)confidence);
+
+  printf("[sim] mood change #%u: %s (%u%%)\n", g_sim_mood_seq,
+         agitated ? "agitated" : "calm", (unsigned)confidence);
+
+  ret = hs_ble_event_notify(HS_BLE_EV_MOOD_CHANGE,
+                            agitated ? HS_BLE_RISK_HIGH : HS_BLE_RISK_LOW,
+                            confidence,
+                            HS_BLE_FLAG_ACK_REQ | HS_BLE_FLAG_SIMULATED);
+  if (ret < 0)
+    {
+      printf("[sim] event notify failed: %d (BLE still off?)\n", ret);
+    }
+}
+
+/****************************************************************************
+ * Name: ma_key_thread
+ *
+ * Description:
+ *   Poll the on-board key and turn a press into the bench emotion trigger.
+ *   /dev/buttons is a plain GPIO read, so 20 Hz costs nothing; the 500 ms UI
+ *   timer would miss a normal tap.
+ *
+ ****************************************************************************/
+
+static FAR void *ma_key_thread(FAR void *arg)
+{
+  struct hs_buttons_s buttons = { .fd = -1 };
+  bool     was_pressed = false;
+  unsigned retries = 0;
+
+  (void)arg;
+
+  for (; ; )
+    {
+      uint32_t state = 0;
+      bool     pressed;
+
+      if (buttons.fd < 0)
+        {
+          if (hs_buttons_open(&buttons, HS_BUTTONS_DEVICE) < 0)
+            {
+              /* The lower half may still be registering, so retry a few
+               * times and then give up rather than spin on a dead node.
+               */
+
+              if (++retries > 10)
+                {
+                  printf("[sim] %s unavailable, key trigger disabled\n",
+                         HS_BUTTONS_DEVICE);
+                  return NULL;
+                }
+
+              sleep(2);
+              continue;
+            }
+
+          printf("[sim] KEY2 ready: press it to fake an emotion change\n");
+        }
+
+      if (hs_buttons_read(&buttons, &state) < 0)
+        {
+          hs_buttons_close(&buttons);
+          usleep(200 * 1000);
+          continue;
+        }
+
+      /* PA43 idles low behind its pull-down, so bit 0 is set while the key
+       * is held.  Trigger on the press edge only.
+       */
+
+      pressed = (state & 1u) != 0;
+
+      if (pressed && !was_pressed)
+        {
+          ma_sim_emotion_trigger();
+        }
+
+      was_pressed = pressed;
+      usleep(50 * 1000);
+    }
+
+  return NULL;
+}
+
+/****************************************************************************
  * Name: ma_ble_data_thread
  *
  * Description:
@@ -2589,15 +2453,6 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
 
       sample.gyro_dps10 = (uint16_t)result.gyro_mag_dps10;
 
-      /* Vitals ride along on the same packet; they are not part of the
-       * arousal decision, but the phone already knows what to do with them.
-       */
-
-      sample.hr_valid   = g_ble_vitals_ok != 0;
-      sample.hr_bpm     = g_ble_hr;
-      sample.spo2_valid = g_ble_vitals_ok != 0;
-      sample.spo2       = g_ble_spo2;
-
       /* Battery: the sampling thread owns the ADC and publishes the reading
        * in g_vbat_mv, so this thread only has to map it to a percentage.
        */
@@ -2636,17 +2491,10 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
                  result.confidence);
         }
 
-      /* Buttons and the vibration motor are no longer part of the payload,
-       * but polling them here is what keeps the SYSTEM page's sensor
-       * inventory honest - a node that exists but never answers should show
-       * up as IDLE rather than as working.
+      /* The key is polled here as well so that the SYSTEM page's sensor
+       * inventory stays honest - a node that exists but never answers should
+       * show up as IDLE rather than as working.
        */
-
-      if (g_vib_open || hs_vibration_open(&g_vib) >= 0)
-        {
-          g_vib_open = true;
-          (void)hs_vibration_is_enabled(&g_vib);
-        }
 
       if (g_btn_open || hs_buttons_open(&g_btn, HS_BUTTONS_DEVICE) >= 0)
         {
@@ -2660,6 +2508,17 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
        * derived from.  The status characteristic is for the receiver's
        * battery figure and only goes out when it changes.
        */
+
+      /* Bench override: while the key trigger is armed, the faked verdict
+       * replaces the fused one, so the phone sees the same emotion change the
+       * event characteristic carried.  The UI timer expires it.
+       */
+
+      if (g_sim_mood_active)
+        {
+          result.agitated   = g_sim_mood_agitated;
+          result.confidence = g_sim_mood_confidence;
+        }
 
       sample.gsr_ready  = result.gsr_ready;
       sample.agitated   = result.agitated;
@@ -2895,6 +2754,7 @@ int main(int argc, FAR char *argv[])
   lv_nuttx_dsc_t info;
   lv_nuttx_result_t result;
   lv_obj_t *screen;
+  pthread_attr_t attr;
   int i;
 
 #ifdef CONFIG_LV_USE_NUTTX_LIBUV
@@ -2946,7 +2806,6 @@ int main(int argc, FAR char *argv[])
   ma_build_system_page(g_tiles[MA_PAGE_SYSTEM]);
   ma_build_link_page(g_tiles[MA_PAGE_BLE]);
   ma_build_mood_page(g_tiles[MA_PAGE_GSR]);
-  ma_build_vitals_page(g_tiles[MA_PAGE_PPG]);
   ma_build_motion_page(g_tiles[MA_PAGE_IMU]);
   ma_build_mic_page(g_tiles[MA_PAGE_MIC]);
   ma_build_tune_page(g_tiles[MA_PAGE_TUNE]);
@@ -2956,24 +2815,34 @@ int main(int argc, FAR char *argv[])
   lv_timer_create(ma_mic_timer, 100, NULL);
   ma_refresh_timer(NULL);
 
-  /* Start the PPG pipeline: the beat detector needs a few seconds of samples
-   * before it can report anything, and the panel should already be drawing
-   * by then.
-   */
-
-  ma_ppg_start();
   ma_sys_start();
   ma_mic_start();
   ma_imu_start();
   ma_gsr_start();
   ma_mood_start();
 
+  /* The on-board key fakes an emotion change for bench testing, so the phone
+   * side can be exercised without the electrodes.
+   */
+
+  if (pthread_attr_init(&attr) == 0)
+    {
+      pthread_attr_setstacksize(&attr, 4096);
+      if (pthread_create(&g_key_thread, &attr, ma_key_thread, NULL) == 0)
+        {
+          pthread_detach(g_key_thread);
+        }
+
+      pthread_attr_destroy(&attr);
+    }
+
   /* Bluetooth stays off until the LINK page switch is touched.  Bringing the
    * host stack up costs a burst of synchronous HCI traffic, and starting it
    * unprompted only competes with the first frames the panel draws.
    */
 
-  printf("MoodAnchor UI running (swipe for VITALS / MOTION / LINK)\n");
+  printf("MoodAnchor UI running (swipe for SYSTEM / MOOD / MOTION / SOUND / "
+         "LINK / TUNE); KEY2 fakes an emotion change\n");
 
 #ifdef CONFIG_LV_USE_NUTTX_LIBUV
   lv_nuttx_uv_loop(&ui_loop, &result);

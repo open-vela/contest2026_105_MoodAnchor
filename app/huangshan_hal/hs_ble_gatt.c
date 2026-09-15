@@ -1109,16 +1109,6 @@ int hs_ble_data_notify(const struct hs_ble_sample_s *sample)
       flags |= HS_BLE_DATA_BAT_VALID;
     }
 
-  if (sample->hr_valid)
-    {
-      flags |= HS_BLE_DATA_HR_VALID;
-    }
-
-  if (sample->spo2_valid)
-    {
-      flags |= HS_BLE_DATA_SPO2_VALID;
-    }
-
   if (sample->imu_valid)
     {
       flags |= HS_BLE_DATA_IMU_VALID;
@@ -1136,8 +1126,14 @@ int hs_ble_data_notify(const struct hs_ble_sample_s *sample)
 
   g_data_pkt[0]  = sample->gsr_valid ? (uint8_t)(sample->gsr_mv & 0xff) : 0;
   g_data_pkt[1]  = sample->gsr_valid ? (uint8_t)(sample->gsr_mv >> 8) : 0;
-  g_data_pkt[2]  = sample->hr_valid ? sample->hr_bpm : 0;
-  g_data_pkt[3]  = sample->spo2_valid ? sample->spo2 : 0;
+  /* Bytes 2 and 3 are the receiver's heart-rate and SpO2 slots.  The optical
+   * sensor was removed from the design, so they stay zero and the matching
+   * validity bits stay clear: the phone then shows "no reading" instead of a
+   * stale number.
+   */
+
+  g_data_pkt[2]  = 0;
+  g_data_pkt[3]  = 0;
   g_data_pkt[4]  = flags;
   g_data_pkt[5]  = sample->mic_valid ? sample->mic_level : 0;
   g_data_pkt[6]  = sample->bat_valid ? sample->battery
@@ -1222,16 +1218,6 @@ int hs_ble_status_notify(const struct hs_ble_sample_s *sample)
       flags |= HS_BLE_STATUS_GSR_VALID;
     }
 
-  if (sample->hr_valid)
-    {
-      flags |= HS_BLE_STATUS_HR_VALID;
-    }
-
-  if (sample->spo2_valid)
-    {
-      flags |= HS_BLE_STATUS_SPO2_VALID;
-    }
-
   if (sample->bat_valid)
     {
       flags |= HS_BLE_STATUS_BAT_VALID;
@@ -1247,8 +1233,11 @@ int hs_ble_status_notify(const struct hs_ble_sample_s *sample)
   g_status_pkt[1]  = flags;
   g_status_pkt[2]  = sample->gsr_valid ? (uint8_t)(sample->gsr_mv & 0xff) : 0;
   g_status_pkt[3]  = sample->gsr_valid ? (uint8_t)(sample->gsr_mv >> 8) : 0;
-  g_status_pkt[4]  = sample->hr_valid ? sample->hr_bpm : 0;
-  g_status_pkt[5]  = sample->spo2_valid ? sample->spo2 : 0;
+  /* Bytes 4 and 5 are the receiver's heart-rate and SpO2 slots, kept at zero
+   * because the optical sensor was removed from the design. */
+
+  g_status_pkt[4]  = 0;
+  g_status_pkt[5]  = 0;
   g_status_pkt[12] = sample->bat_valid ? sample->battery
                                        : HS_BLE_STATUS_BAT_UNKNOWN;
 

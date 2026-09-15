@@ -340,7 +340,6 @@ static const uint32_t g_cn_battery_supply[] =
   { 0x7535, 0x6c60, 0x4f9b, 0x7535 };
 static const uint32_t g_cn_gsr[] = { 0x76ae, 0x7535 };
 static const uint32_t g_cn_imu[] = { 0x516d, 0x8f74 };
-static const uint32_t g_cn_spo2[] = { 0x8840, 0x6c27 };
 
 /* Addresses worth probing periodically on the panel.  A full 0x08-0x77 scan
  * must not run inside the display loop: every absent address costs an I2C
@@ -426,12 +425,11 @@ static int hs_i2c_scan(struct hs_i2c_s *bus, uint8_t *found, int max)
 
 static void hs_demo_help(void)
 {
-  printf("huangshan_hal_demo <all|i2c|adc|power|pwm|vibration|imu|mic_once|mic_stream|lcd|lcdtest|ble|ble_adv|blehost|bleevent|blestatus|sysinfo|gsr_once|gsr_cal|gsr_stream|max30102_once|max30102_stream>\n");
+  printf("huangshan_hal_demo <all|i2c|adc|power|pwm|imu|mic_once|mic_stream|lcd|lcdtest|ble|ble_adv|blehost|bleevent|blestatus|sysinfo|gsr_once|gsr_cal|gsr_stream>\n");
   printf("  i2c: probe FT6146 at I2C1 address 0x38\n");
   printf("  adc: read the VBAT ADC channel (channel 5)\n");
   printf("  power: print USB, VBAT, charger registers and KEY2 once\n");
   printf("  pwm: output 1 kHz, 50%% on /dev/pwm0 for 2 seconds\n");
-  printf("  vibration [on|off]: drive PA20 (30P-24) high/low for the vibration module\n");
   printf("  imu: read one LSM6DSL accelerometer/gyroscope sample\n");
   printf("  mic_once: read one PCM block from the board MEMS microphone\n");
   printf("  mic_stream: print microphone RMS/peak at about 20 Hz\n");
@@ -448,90 +446,6 @@ static void hs_demo_help(void)
   printf("  gsr_once: read Grove GSR from PA28 (/dev/adc1) once\n");
   printf("  gsr_cal [seconds]: open-electrode calibration, default 30 seconds\n");
   printf("  gsr_stream <CAL_RAW10>: CSV at about 5 Hz; Ctrl+C to exit\n");
-  printf("  max30102_once: read one MAX30102 RED/IR sample on /dev/i2c1\n");
-  printf("  max30102_stream: poll MAX30102 FIFO and print RED/IR at about 25 Hz\n");
-  printf("  max30102_regs: dump pulse-oximeter registers and one FIFO burst\n");
-  printf("                 optional <hz> argument, e.g. 100000\n");
-}
-
-static int hs_demo_max30102_once(void)
-{
-  struct hs_max30102_s sensor;
-  struct hs_max30102_sample_s sample;
-  int ret;
-
-  ret = hs_max30102_open(&sensor, HS_MAX30102_I2C_BUS);
-  if (ret < 0)
-    {
-      printf("max30102: open failed on /dev/i2c%u addr=0x%02x (%d)\n",
-             HS_MAX30102_I2C_BUS, HS_MAX30102_I2C_ADDRESS, ret);
-      return ret;
-    }
-
-  ret = hs_max30102_read_sample(&sensor, &sample);
-  if (ret < 0)
-    {
-      printf("max30102: sample unavailable (%d), keep sensor on finger and retry\n",
-             ret);
-    }
-  else
-    {
-      printf("max30102: addr=0x%02x red=%lu ir=%lu time_ms=%lu\n",
-             HS_MAX30102_I2C_ADDRESS, (unsigned long)sample.red,
-             (unsigned long)sample.ir, (unsigned long)sample.timestamp_ms);
-    }
-
-  printf("max30102: part_id=0x%02x rev_id=0x%02x (0x15 = genuine MAX30102)\n",
-         sensor.part_id, sensor.rev_id);
-
-  hs_max30102_close(&sensor);
-  return ret;
-}
-
-static int hs_demo_max30102_stream(void)
-{
-  struct hs_max30102_s sensor;
-  struct hs_max30102_sample_s sample;
-  int ret;
-  int errors = 0;
-
-  ret = hs_max30102_open(&sensor, HS_MAX30102_I2C_BUS);
-  if (ret < 0)
-    {
-      printf("max30102_stream: open failed (%d)\n", ret);
-      return ret;
-    }
-
-  printf("max30102: part_id=0x%02x rev_id=0x%02x (0x15 = genuine MAX30102)\n",
-         sensor.part_id, sensor.rev_id);
-  printf("time_ms,red,ir,status\n");
-  while (1)
-    {
-      ret = hs_max30102_read_sample(&sensor, &sample);
-      if (ret == 0)
-        {
-          printf("%lu,%lu,%lu,OK\n", (unsigned long)sample.timestamp_ms,
-                 (unsigned long)sample.red, (unsigned long)sample.ir);
-          errors = 0;
-        }
-      else if (ret == -EAGAIN)
-        {
-          errors = 0;
-        }
-      else
-        {
-          printf("0,0,0,ERROR(%d)\n", ret);
-          if (++errors >= 5)
-            {
-              break;
-            }
-        }
-
-      usleep(40000);
-    }
-
-  hs_max30102_close(&sensor);
-  return ret == -EAGAIN ? 0 : ret;
 }
 
 static int hs_demo_imu(void)
@@ -1007,36 +921,6 @@ static int hs_demo_pwm(void)
   return ret;
 }
 
-static int hs_demo_vibration(const char *mode)
-{
-  struct hs_vibration_s vibration = { .fd = -1 };
-  bool enabled;
-  int ret;
-
-  if (mode == NULL || (strcmp(mode, "on") != 0 &&
-                       strcmp(mode, "off") != 0))
-    {
-      printf("vibration: usage vibration on|off\n");
-      return -EINVAL;
-    }
-
-  enabled = strcmp(mode, "on") == 0;
-  ret = hs_vibration_open(&vibration);
-  if (ret >= 0)
-    {
-      ret = hs_vibration_set(&vibration, enabled);
-      printf("vibration: PA20=%d (%s)\n", enabled ? 1 : 0,
-             ret < 0 ? "failed" : "ok");
-    }
-  else
-    {
-      printf("vibration: open %s failed (%d)\n", HS_VIBRATION_DEVICE, ret);
-    }
-
-  hs_vibration_close(&vibration);
-  return ret;
-}
-
 static int hs_demo_lcd(void)
 {
   struct hs_lcd_s lcd = { .fd = -1 };
@@ -1339,10 +1223,8 @@ static int hs_demo_sysinfo(void)
   struct hs_adc_s adc = { .fd = -1 };
   struct hs_gsr_s gsr = { .adc = { .fd = -1 } };
   struct hs_buttons_s buttons = { .fd = -1 };
-  struct hs_vibration_s vibration = { .fd = -1 };
   struct hs_imu_s imu = { .fd = -1, .started = false };
   struct hs_mic_s mic = { .fd = -1 };
-  struct hs_max30102_s max30102 = { .i2c = { .fd = -1 } };
   int vbus_fd = -1;
   uint8_t found0[16];
   uint8_t found1[16];
@@ -1350,16 +1232,10 @@ static int hs_demo_sysinfo(void)
   unsigned int tick = 0;
   int n0 = 0;
   int n1 = 0;
-  uint8_t max_id_ff = 0;
-  uint8_t max_id_fe = 0;
-  int max_id_ret = -ENODEV;
   int probe_idx0 = 0;
   int probe_idx1 = 0;
   int ret;
   bool first_frame = true;
-  bool max_sample_valid = false;
-  uint32_t max_last_red = 0;
-  uint32_t max_last_ir = 0;
 
   ret = hs_lcd_open(&lcd, NULL);
   if (ret < 0)
@@ -1375,15 +1251,11 @@ static int hs_demo_sysinfo(void)
    * connected or /dev/adc1 is unavailable. */
   hs_gsr_open(&gsr);
   hs_buttons_open(&buttons, NULL);
-  hs_vibration_open(&vibration);
   vbus_fd = open("/dev/gpio1", O_RDONLY);
   hs_imu_open(&imu);
   hs_mic_open(&mic, 16000);
-  hs_max30102_open(&max30102, HS_MAX30102_I2C_BUS);
 
   printf("sysinfo panel on, press Ctrl+C to exit\n");
-
-  bool key2_pressed = false;
 
   while (1)
     {
@@ -1397,10 +1269,7 @@ static int hs_demo_sysinfo(void)
       int mic_rms = 0;
       int mic_peak = 0;
       int16_t mic_samples[64];
-      struct hs_max30102_sample_s max_sample;
-      int maxret = -ENODEV;
       uint32_t button_state = 0;
-      int button_ret;
       uint8_t reg = 0;
       uint8_t touch = 0;
       uint8_t chg01 = 0;
@@ -1457,25 +1326,6 @@ static int hs_demo_sysinfo(void)
             }
         }
 
-      /* Read the pulse-oximeter identification registers every ~3 seconds.
-       * This separates a wiring/power fault (no ACK) from an unexpected chip
-       * model (ACK but a part ID other than MAX30102's 0x15). */
-      if ((tick % 30u) == 0u && i2c1.fd >= 0)
-        {
-          uint8_t idreg = 0xff;
-
-          max_id_ff = 0;
-          max_id_fe = 0;
-          max_id_ret = hs_i2c_write_read(&i2c1, HS_MAX30102_I2C_ADDRESS,
-                                         &idreg, 1, &max_id_ff, 1);
-          if (max_id_ret >= 0)
-            {
-              idreg = 0xfe;
-              (void)hs_i2c_write_read(&i2c1, HS_MAX30102_I2C_ADDRESS,
-                                      &idreg, 1, &max_id_fe, 1);
-            }
-        }
-
       if (adc.fd >= 0)
         {
           hs_adc_read(&adc, HS_ADC_VBAT_CHANNEL, &adcval);
@@ -1518,37 +1368,9 @@ static int hs_demo_sysinfo(void)
             }
         }
 
-      if (max30102.initialized)
-        {
-          maxret = hs_max30102_read_sample(&max30102, &max_sample);
-          if (maxret >= 0)
-            {
-              /* FIFO polling can legitimately return EAGAIN between samples.
-               * Keep the last valid pair visible instead of blanking the panel. */
-              max_last_red = max_sample.red;
-              max_last_ir = max_sample.ir;
-              max_sample_valid = true;
-            }
-        }
-
-      button_ret = -ENODEV;
       if (buttons.fd >= 0)
         {
-          button_ret = hs_buttons_read(&buttons, &button_state);
-          if (button_ret >= 0)
-            {
-              bool pressed = (button_state & 1u) != 0;
-              if (pressed && !key2_pressed && vibration.fd >= 0)
-                {
-                  int vibret = hs_vibration_set(
-                    &vibration, !hs_vibration_is_enabled(&vibration));
-                  printf("KEY2: vibration %s (%d)\n",
-                         hs_vibration_is_enabled(&vibration) ? "on" : "off",
-                         vibret);
-                }
-
-              key2_pressed = pressed;
-            }
+          (void)hs_buttons_read(&buttons, &button_state);
         }
 
       if (i2c0.fd >= 0)
@@ -1628,22 +1450,6 @@ static int hs_demo_sysinfo(void)
       hs_lcd_text(&lcd, value_x + 26, y + 1, line, 0xffe0, 2);
       y += 20;
 
-      /* MAX30102 identification: NOACK means wiring/power, a HEX part ID
-       * other than 15 means the module is a different chip model. */
-      hs_lcd_cn_text(&lcd, safe_x, y, g_cn_spo2,
-                     sizeof(g_cn_spo2) / sizeof(g_cn_spo2[0]), 0xf81f, 1);
-      if (max_id_ret < 0)
-        {
-          snprintf(line, sizeof(line), "NOACK(%d)", max_id_ret);
-        }
-      else
-        {
-          snprintf(line, sizeof(line), "FF=%02X FE=%02X", max_id_ff,
-                   max_id_fe);
-        }
-      hs_lcd_text(&lcd, value_x, y + 1, line, 0xf81f, 2);
-      y += 20;
-
       /* Touch and battery voltage.  Keep the numeric values in ASCII for
        * readability, with fixed Chinese labels beside them. */
       hs_lcd_cn_text(&lcd, safe_x, y, g_cn_touch,
@@ -1689,12 +1495,6 @@ static int hs_demo_sysinfo(void)
       hs_lcd_text(&lcd, value_x, y + 1, line, 0xf81f, 2);
       y += 20;
 
-      hs_lcd_text(&lcd, safe_x, y, "VIB PA20:", 0xf81f, 2);
-      snprintf(line, sizeof(line), " %s", hs_vibration_is_enabled(&vibration)
-               ? "ON" : "OFF");
-      hs_lcd_text(&lcd, value_x, y + 1, line, 0xf81f, 2);
-      y += 20;
-
       hs_lcd_cn_text(&lcd, safe_x, y, g_cn_usb,
                      sizeof(g_cn_usb) / sizeof(g_cn_usb[0]), 0xff80, 1);
       hs_lcd_cn_text(&lcd, value_x, y, g_cn_charge,
@@ -1734,25 +1534,6 @@ static int hs_demo_sysinfo(void)
           snprintf(line, sizeof(line), "-- (LSM6DSL)");
         }
       hs_lcd_text(&lcd, value_x, y + 1, line, 0x07ff, 2);
-      y += 20;
-
-      hs_lcd_text(&lcd, safe_x, y, "MAX:", 0x07e0, 2);
-      if (max_sample_valid)
-        {
-          snprintf(line, sizeof(line), "R:%lu I:%lu %s",
-                   (unsigned long)max_last_red,
-                   (unsigned long)max_last_ir,
-                   maxret == -EAGAIN ? "WAIT" : "OK");
-        }
-      else if (max30102.initialized && maxret == -EAGAIN)
-        {
-          snprintf(line, sizeof(line), "WAIT (0X57)");
-        }
-      else
-        {
-          snprintf(line, sizeof(line), "-- (0X57)");
-        }
-      hs_lcd_text(&lcd, value_x, y + 1, line, 0x07e0, 2);
       y += 20;
 
       hs_lcd_text(&lcd, safe_x, y, "MIC:", 0x07ff, 2);
@@ -1821,9 +1602,7 @@ out:
   hs_buttons_close(&buttons);
   hs_imu_close(&imu);
   hs_mic_close(&mic);
-  hs_max30102_close(&max30102);
   hs_gsr_close(&gsr);
-  hs_vibration_close(&vibration);
   hs_adc_close(&adc);
   hs_i2c_close(&i2c0);
   hs_i2c_close(&i2c1);
@@ -1861,121 +1640,6 @@ static int hs_demo_i2cscan(void)
   return 0;
 }
 
-/* Dump the pulse-oximeter register file and one FIFO burst.  This is the
- * ground-truth probe for low-cost MAX30102-compatible parts: registers that
- * stay 0x00 or a read that fails reveal a chip that does not implement the
- * standard map. */
-
-static int hs_demo_max30102_regs(uint32_t frequency)
-{
-  struct hs_i2c_s bus = { .fd = -1 };
-  uint8_t regs[0x0c];
-  uint8_t fifo[6];
-  char line[64];
-  uint8_t reg;
-  int ret;
-  int i;
-
-  ret = hs_i2c_open(&bus, HS_MAX30102_I2C_BUS, frequency);
-  if (ret < 0)
-    {
-      printf("max30102_regs: /dev/i2c%u open failed (%d)\n",
-             HS_MAX30102_I2C_BUS, ret);
-      return ret;
-    }
-
-  printf("max30102_regs: bus frequency %lu Hz\n",
-         (unsigned long)bus.frequency);
-
-  memset(regs, 0, sizeof(regs));
-  for (i = 0; i <= 0x0b; i++)
-    {
-      uint8_t value = 0;
-
-      reg = (uint8_t)i;
-      ret = hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1,
-                              &value, 1);
-      regs[i] = (ret < 0) ? 0xee : value;
-    }
-
-  for (i = 0; i <= 0x0b; i += 4)
-    {
-      snprintf(line, sizeof(line), "max30102_regs: 0x%02x-0x%02x = %02x %02x "
-               "%02x %02x\n", i, i + 3, regs[i], regs[i + 1], regs[i + 2],
-               regs[i + 3]);
-      printf("%s", line);
-    }
-
-  memset(fifo, 0, sizeof(fifo));
-  reg = 0x07;
-  ret = hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1,
-                          fifo, sizeof(fifo));
-  printf("max30102_regs: fifo burst (0x07) ret=%d %02x %02x %02x %02x %02x "
-         "%02x\n", ret, fifo[0], fifo[1], fifo[2], fifo[3], fifo[4], fifo[5]);
-
-  /* A plain read (no register pointer) shows whether the part responds to a
-   * bare read transaction at all. */
-  {
-    uint8_t raw = 0;
-
-    ret = hs_i2c_read(&bus, HS_MAX30102_I2C_ADDRESS, &raw, 1);
-    printf("max30102_regs: bare read ret=%d value=0x%02x\n", ret, raw);
-  }
-
-  /* Write/read-back test: proves whether configuration writes actually land.
-   * Use registers that are not touched by the driver's init sequence. */
-  {
-    uint8_t wbuf[2];
-    uint8_t rb = 0;
-
-    wbuf[0] = 0x0b;   /* LED1_PA */
-    wbuf[1] = 0x55;
-    ret = hs_i2c_write(&bus, HS_MAX30102_I2C_ADDRESS, wbuf, sizeof(wbuf));
-    reg = 0x0b;
-    (void)hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1, &rb, 1);
-    printf("max30102_regs: write 0x0b=0x55 ret=%d readback=0x%02x\n", ret, rb);
-
-    wbuf[0] = 0x0d;   /* LED2_PA */
-    wbuf[1] = 0x66;
-    ret = hs_i2c_write(&bus, HS_MAX30102_I2C_ADDRESS, wbuf, sizeof(wbuf));
-    reg = 0x0d;
-    (void)hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1, &rb, 1);
-    printf("max30102_regs: write 0x0d=0x66 ret=%d readback=0x%02x\n", ret, rb);
-
-    /* Put the part into SpO2 mode and read the mode back. */
-    wbuf[0] = 0x09;
-    wbuf[1] = 0x03;
-    ret = hs_i2c_write(&bus, HS_MAX30102_I2C_ADDRESS, wbuf, sizeof(wbuf));
-    reg = 0x09;
-    (void)hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1, &rb, 1);
-    printf("max30102_regs: write 0x09=0x03 ret=%d readback=0x%02x\n", ret, rb);
-  }
-
-  /* FIFO pointers: two reads one second apart show whether the part is
-   * sampling.  Equal or static pointers explain missing samples. */
-  {
-    uint8_t wr1 = 0;
-    uint8_t rd1 = 0;
-    uint8_t wr2 = 0;
-    uint8_t rd2 = 0;
-
-    reg = 0x04;
-    (void)hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1, &wr1, 1);
-    reg = 0x06;
-    (void)hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1, &rd1, 1);
-    sleep(1);
-    reg = 0x04;
-    (void)hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1, &wr2, 1);
-    reg = 0x06;
-    (void)hs_i2c_write_read(&bus, HS_MAX30102_I2C_ADDRESS, &reg, 1, &rd2, 1);
-    printf("max30102_regs: wr_ptr %02x->%02x  rd_ptr %02x->%02x\n",
-           wr1, wr2, rd1, rd2);
-  }
-
-  hs_i2c_close(&bus);
-  return 0;
-}
-
 int huangshan_hal_demo_main(int argc, char *argv[])
 {
   const char *name;
@@ -2001,10 +1665,6 @@ int huangshan_hal_demo_main(int argc, char *argv[])
   if (strcmp(name, "pwm") == 0)
     {
       return hs_demo_pwm();
-    }
-  if (strcmp(name, "vibration") == 0)
-    {
-      return hs_demo_vibration(argc > 2 ? argv[2] : NULL);
     }
   if (strcmp(name, "blehost") == 0)
     {
@@ -2064,17 +1724,6 @@ int huangshan_hal_demo_main(int argc, char *argv[])
     {
       return hs_demo_i2cscan();
     }
-  if (strcmp(name, "max30102_regs") == 0)
-    {
-      uint32_t frequency = HS_I2C_DEFAULT_FREQUENCY;
-
-      if (argc > 2)
-        {
-          frequency = (uint32_t)strtoul(argv[2], NULL, 0);
-        }
-
-      return hs_demo_max30102_regs(frequency);
-    }
   if (strcmp(name, "gsr_once") == 0)
     {
       return hs_demo_gsr_once();
@@ -2103,14 +1752,6 @@ int huangshan_hal_demo_main(int argc, char *argv[])
         }
 
       return hs_demo_gsr_stream((uint16_t)calibration);
-    }
-  if (strcmp(name, "max30102_once") == 0)
-    {
-      return hs_demo_max30102_once();
-    }
-  if (strcmp(name, "max30102_stream") == 0)
-    {
-      return hs_demo_max30102_stream();
     }
   if (strcmp(name, "all") == 0)
     {

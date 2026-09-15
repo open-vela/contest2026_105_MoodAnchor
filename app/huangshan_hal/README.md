@@ -7,9 +7,7 @@
 |---|---|---|
 | I2C | `/dev/i2c0`、`/dev/i2c1` | `hs_i2c_open/write/read/write_read` |
 | ADC | `/dev/adc0`（VBAT）、`/dev/adc1`（GSR/PA28） | `hs_adc_open/read`、`hs_gsr_open/read` |
-| MAX30102 心率/血氧模块 | `/dev/i2c1`，地址 `0x57` | `hs_max30102_open/read_sample` |
 | PWM | `/dev/pwm0` | `hs_pwm_open/set/stop` |
-| 震动输出 | `/dev/gpio3`（PA20，30P-24） | `hs_vibration_open/set/close` |
 | LCD | `/dev/fb0` | `hs_lcd_open/fill/pixel/flush` |
 | BLE H:4 | `/dev/ttyHCI0` | `hs_ble_open/reset/command` |
 | 板载麦克风 | `/dev/audio/pcm0c`（需 AUDCODEC 音频后端） | `hs_mic_open/read/close` |
@@ -124,21 +122,18 @@ hs_gsr_close(&gsr);
 负的 `errno`（如 `-ENODEV`、`-EIO`、`-EINVAL`）；未连接传感器时不会阻塞
 系统，可直接按错误处理。
 
-## 震动模块和 KEY2
+## KEY2 调试按键（模拟情绪变化）
 
-PA20（30P-24，VIB PWM）作为普通推挽输出，注册为 `/dev/gpio3`。PA30
-保留给 LSM6DSL/MAX30102 传感器电源，PA42 是 Audio_PA_EN，均不得用于震动控制。
-`hs_vibration_set(..., true)`
-输出高电平，`false` 输出低电平。板载 KEY2（PA43）在开机自动运行的
-`sysinfo` 面板中按一下开启震动，再按一下关闭震动；也可以在串口单独测试：
+板载 KEY2（`PA_43`）在开机自动运行的 `mood_anchor` 里是调试触发键：按一下
+翻转一次融合判定（平静 ⇄ 激动），并在 BLE 事件特征（`d38a0002`）上发一包
+`HS_BLE_EV_MOOD_CHANGE (0x07)` 事件，flags 带 `SIMULATED | ACK_REQ`。
+同一份模拟判定会接管数据包的情绪字节 10 秒，让手机端看到与事件一致的变化。
 
-```text
-nsh> huangshan_hal_demo vibration on
-nsh> huangshan_hal_demo vibration off
-```
+LINK 页会显示 `sim mood #N ...`，串口打印 `[sim] mood change #N: ...`，
+手机端 App 会显示"收到手表事件"（0x07 目前显示为"未知事件（0x7）"，接收端
+加一行映射即可显示为"情绪变化"）。
 
-PA20 只能作为逻辑控制信号。若使用裸偏心马达，必须经过三极管或 MOSFET
-驱动，并加续流二极管，不能把马达线圈直接接到 MCU GPIO。
+PA20（原马达驱动）本工程设计不再使用，固件不再驱动它。
 
 接线前先完全断开 USB 与电池。30P 排针表中 11 脚是 `VCC_3V3_S` 电源
 输出、12 脚是 `VCC_3V3`，保持 11--12 跳线帽连接后，Grove 红线接 11 脚
@@ -146,32 +141,10 @@ PA20 只能作为逻辑控制信号。若使用裸偏心马达，必须经过三
 串联电阻接 21 脚 `PA28`；白线悬空并绝缘。上电前用万用表确认 11 脚对
 GND 约 3.3 V，禁止接 1/2 脚 USB 5V 或 5/6 脚 BAT。
 
-## MAX30102 心率/血氧模块
+## 已移除的模块
 
-按黄山派 30P 接口表，传感器 I²C 总线为 **16 脚 PA40=SCL、14 脚
-PB39=SDA**，系统节点为 `/dev/i2c1`（该总线同时连接板载 LSM6DSL）。
-板级 BSP 的复用配置使用 PA39/PA40 表示这组 SDA/SCL 网络；实际接线只需
-按排针编号 14/16 连接，不要把 SDA 接到 9 脚。
-MAX30102 可与该总线并联，使用 7 位地址 `0x57`。INT 引脚第一版可悬空，
-驱动通过 FIFO 轮询读取，不依赖中断。
+心率 / 血氧（MAX30102 + `hs_ppg.c`）和振动输出（`hs_vibration_*`）已经从
+本工程删除：外接传感器只剩 GSR 一路，PA20 不再驱动马达。
 
-接线（确认手上的模块是带稳压/电平转换的成品 breakout）：
-
-```text
-MAX30102 VCC -> 30P-11 (VCC_3V3_S, 3.3V；11--12 跳线保持连接)
-MAX30102 GND -> 30P-3/4/9/10 (GND)
-MAX30102 SCL -> 30P-16 (PA40)
-MAX30102 SDA -> 30P-14 (PB39，BSP 对应 PA39 网络)
-MAX30102 INT -> 悬空（可选）
-```
-
-裸 MAX30102 芯片要求 1.8V 逻辑和独立 LED 供电，不能直接按上表接 3.3V；
-不确定时先查模块原理图。命令：
-
-```text
-nsh> huangshan_hal_demo max30102_once
-nsh> huangshan_hal_demo max30102_stream
-```
-
-接口返回原始 RED/IR 光电数据和时间戳，供上层心率/血氧算法使用；数据未经
-医疗校准，不应作为诊断结论。
+BLE 数据/状态包里的**心率、血氧字节偏移保持不变**（接收端 App 按固定偏移
+读取），但有效位永远清零、数值恒为 0，手机端显示为"无读数"。

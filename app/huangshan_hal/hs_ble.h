@@ -85,6 +85,10 @@
  * one and reads value[0] as the low half of the GSR sample.  Adding fields
  * means adding them at the end.
  *
+ * Bytes 2 and 3 (heart rate, SpO2) are reserved: the optical module was
+ * removed from the design, so their validity bits are never set and the
+ * bytes are always zero.  The offsets stay where the receiver expects them.
+ *
  * The microphone level is a relative figure, not a sound pressure level: mic
  * bias, sensitivity and gain all differ between units, so it is only
  * meaningful against its own recent history.
@@ -93,8 +97,8 @@
 #define HS_BLE_DATA_LEN          16
 
 #define HS_BLE_DATA_GSR_VALID    0x01
-#define HS_BLE_DATA_HR_VALID     0x02
-#define HS_BLE_DATA_SPO2_VALID   0x04
+#define HS_BLE_DATA_HR_VALID     0x02    /* reserved: no optical sensor */
+#define HS_BLE_DATA_SPO2_VALID   0x04    /* reserved: no optical sensor */
 #define HS_BLE_DATA_MIC_VALID    0x08
 #define HS_BLE_DATA_BAT_VALID    0x10
 #define HS_BLE_DATA_IMU_VALID    0x20
@@ -138,8 +142,8 @@
 #define HS_BLE_STATUS_VERSION    0x01
 
 #define HS_BLE_STATUS_GSR_VALID  0x01
-#define HS_BLE_STATUS_HR_VALID   0x02
-#define HS_BLE_STATUS_SPO2_VALID 0x04
+#define HS_BLE_STATUS_HR_VALID   0x02    /* reserved: no optical sensor */
+#define HS_BLE_STATUS_SPO2_VALID 0x04    /* reserved: no optical sensor */
 #define HS_BLE_STATUS_BAT_VALID  0x10
 
 #define HS_BLE_STATUS_BAT_UNKNOWN 0xff
@@ -155,6 +159,7 @@
 #define HS_BLE_EV_SPO2_LOW      0x04    /* low blood oxygen */
 #define HS_BLE_EV_SLEEP         0x05    /* sleep event */
 #define HS_BLE_EV_LOW_BATTERY   0x06
+#define HS_BLE_EV_MOOD_CHANGE   0x07    /* fused mood verdict flipped */
 #define HS_BLE_EV_SELFTEST      0xff    /* bench/self test event */
 
 /* Risk levels (byte 8) */
@@ -413,12 +418,6 @@ struct hs_ble_sample_s
 
   bool     bat_valid;
   uint8_t  battery;             /* HS_BLE_STATUS_BAT_UNKNOWN when unknown */
-
-  bool     hr_valid;
-  uint8_t  hr_bpm;
-
-  bool     spo2_valid;
-  uint8_t  spo2;
 
   bool     imu_valid;
   int16_t  accel_mg[3];

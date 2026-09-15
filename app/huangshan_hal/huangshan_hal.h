@@ -44,7 +44,6 @@ extern "C"
 #define HS_ADC_VBAT_DIVIDER      2
 #define HS_ADC_GSR_CHANNEL       0
 #define HS_BUTTONS_DEVICE        "/dev/buttons"
-#define HS_VIBRATION_DEVICE      "/dev/gpio3" /* PA20, 30P-24 VIB PWM */
 #define HS_PWM_DEVICE            "/dev/pwm0"
 #define HS_LCD_DEVICE            "/dev/fb0"
 #define HS_BLE_DEVICE            "/dev/ttyHCI0"
@@ -53,8 +52,6 @@ extern "C"
  * enabled.  The board's MEMS microphone is analog (MIC_BIAS/MIC_ADC_IN), so
  * it must be exposed by the audio driver as PCM; it is not a GPADC channel. */
 #define HS_MIC_DEVICE            "/dev/audio/pcm0c"
-#define HS_MAX30102_I2C_BUS      1u
-#define HS_MAX30102_I2C_ADDRESS  0x57u
 
 struct hs_i2c_s
 {
@@ -72,33 +69,6 @@ int hs_i2c_read(struct hs_i2c_s *bus, uint16_t address,
 int hs_i2c_write_read(struct hs_i2c_s *bus, uint16_t address,
                       const void *wdata, size_t wlength,
                       void *rdata, size_t rlength);
-
-/* MAX30102 optical heart-rate/SpO2 sensor.  The API deliberately exposes
- * raw RED/IR FIFO samples; heart-rate and SpO2 calculations belong to the
- * application and these values are not medical measurements. */
-struct hs_max30102_sample_s
-{
-  uint32_t red;
-  uint32_t ir;
-  uint32_t timestamp_ms;
-};
-
-struct hs_max30102_s
-{
-  struct hs_i2c_s i2c;
-  uint8_t address;
-  /* PART_ID read from register 0xff at open time.  0x15 identifies a genuine
-   * MAX30102/MAX30105; low-cost MAX30102-compatible parts often report 0x00
-   * or a vendor value while still decoding the standard register map. */
-  uint8_t part_id;
-  uint8_t rev_id;
-  bool initialized;
-};
-
-int hs_max30102_open(struct hs_max30102_s *sensor, unsigned int busno);
-void hs_max30102_close(struct hs_max30102_s *sensor);
-int hs_max30102_read_sample(struct hs_max30102_s *sensor,
-                            struct hs_max30102_sample_s *sample);
 
 struct hs_adc_s
 {
@@ -195,22 +165,6 @@ struct hs_buttons_s
 int hs_buttons_open(struct hs_buttons_s *buttons, const char *devpath);
 void hs_buttons_close(struct hs_buttons_s *buttons);
 int hs_buttons_read(struct hs_buttons_s *buttons, uint32_t *state);
-
-/* PA20 vibration control output (exported as /dev/gpio3).  PA30 is reserved
- * for the LSM6DSL/MAX30102 sensor power path and PA42 is Audio_PA_EN; neither
- * must be driven by the vibration path.
- * Drive a transistor/MOSFET input or a vibration-driver EN pin; do not
- * connect a bare motor directly to a GPIO. */
-struct hs_vibration_s
-{
-  int fd;
-  bool enabled;
-};
-
-int hs_vibration_open(struct hs_vibration_s *vibration);
-void hs_vibration_close(struct hs_vibration_s *vibration);
-int hs_vibration_set(struct hs_vibration_s *vibration, bool enabled);
-bool hs_vibration_is_enabled(const struct hs_vibration_s *vibration);
 
 struct hs_pwm_s
 {
