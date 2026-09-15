@@ -116,8 +116,8 @@ OPENVELA_ROOT=/path/to/openvela scripts/build_huangshan.sh
 | 手机连接手表并确认状态 | 见下方“设备配对演示”播放器 |
 | 手表确认事件后，Android 状态栏提示 | 见下方“事件通知演示”播放器 |
 | Android App 首页和手表连接入口 | 见下方“App 首页演示”播放器 |
-| Android App 的事件触发与交互 | 见下方“App 事件流程演示”播放器 |
-| 情绪日历、铃声和设备状态设置 | 见下方“日历与音频设置演示”播放器 |
+| Android App 的事件触发与交互 | 见下方“情绪干预音频演示”播放器 |
+| 情绪日历、铃声和设备状态设置 | 见下方“情绪日历记录演示”播放器 |
 
 ### 可直接播放的分段演示
 
@@ -133,11 +133,11 @@ https://github.com/user-attachments/assets/865346d2-2e24-44c7-a382-379679ea1128
 
 https://github.com/user-attachments/assets/f6358fc4-588d-48b1-95fe-a7ebce02dab6
 
-#### App 事件流程演示
+#### 情绪干预音频演示
 
 https://github.com/user-attachments/assets/c4ca6f70-2def-453b-b568-aeb5bdd7c8c5
 
-#### 日历与音频设置演示
+#### 情绪日历记录演示
 
 https://github.com/user-attachments/assets/7daae2d2-b47a-4a51-96dd-6ee684ebf6d6
 
