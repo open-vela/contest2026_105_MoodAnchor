@@ -5,7 +5,7 @@
 | 黄山派手表与 Android 手机的 BLE/GATT 连接、状态订阅和真实硬件联调 | `01_watch_phone_ble_connection.mp4` |
 | 手机扫描、连接与手表端状态确认 | `02_watch_phone_pairing.mp4` |
 | 手表确认事件后，Android 状态栏出现“是非钟”提醒 | `03_android_event_notification.mp4` |
-| Android App 首页与手表连接入口 | `04_android_app_home.mp4` |
+| 云端大模型陪伴对话 | `04_android_app_home.mp4` |
 | 情绪干预音频演示 | `05_android_event_flow.mp4` |
 | 情绪日历记录演示 | `06_android_calendar_and_audio.mp4` |
 

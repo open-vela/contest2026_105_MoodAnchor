@@ -115,7 +115,7 @@ OPENVELA_ROOT=/path/to/openvela scripts/build_huangshan.sh
 | 黄山派手表与 Android 手机 BLE/GATT 真实连接和状态订阅 | [完整演示视频（主视频，Git LFS 文件导航）](videos/01_watch_phone_ble_connection.mp4) |
 | 手机连接手表并确认状态 | 见下方“设备配对演示”播放器 |
 | 手表确认事件后，Android 状态栏提示 | 见下方“事件通知演示”播放器 |
-| Android App 首页和手表连接入口 | 见下方“App 首页演示”播放器 |
+| 云端大模型陪伴对话 | 见下方“云端大模型陪伴对话”播放器 |
 | Android App 的事件触发与交互 | 见下方“情绪干预音频演示”播放器 |
 | 情绪日历、铃声和设备状态设置 | 见下方“情绪日历记录演示”播放器 |
 
@@ -129,7 +129,7 @@ https://github.com/user-attachments/assets/e2f21015-0fa6-4112-af10-c110c8390606
 
 https://github.com/user-attachments/assets/865346d2-2e24-44c7-a382-379679ea1128
 
-#### App 首页演示
+#### 云端大模型陪伴对话
 
 https://github.com/user-attachments/assets/f6358fc4-588d-48b1-95fe-a7ebce02dab6
 
