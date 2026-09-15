@@ -2327,7 +2327,13 @@ static void ma_sim_emotion_trigger(void)
   printf("[sim] mood change #%u: %s (%u%%)\n", g_sim_mood_seq,
          agitated ? "agitated" : "calm", (unsigned)confidence);
 
-  ret = hs_ble_event_notify(HS_BLE_EV_MOOD_CHANGE,
+  /* HS_BLE_EV_SELFTEST is the only type the receiver already names that
+   * suits a bench trigger ("自检 / 台架测试"); the phone side is fixed, so a
+   * dedicated mood-change type would only show up there as an unknown event.
+   * The verdict itself still travels in the data characteristic's byte 15.
+   */
+
+  ret = hs_ble_event_notify(HS_BLE_EV_SELFTEST,
                             agitated ? HS_BLE_RISK_HIGH : HS_BLE_RISK_LOW,
                             confidence,
                             HS_BLE_FLAG_ACK_REQ | HS_BLE_FLAG_SIMULATED);

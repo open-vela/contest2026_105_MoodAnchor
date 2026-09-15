@@ -150,6 +150,12 @@
 
 /****************************************************************************
  * Event types (byte 1)
+ *
+ * The phone side is fixed and must not be changed to accommodate us: its
+ * eventName() mapping is exactly the set below.  Any other value shows up on
+ * the phone as "未知事件", so do not invent new types here.  A bench or
+ * simulated trigger therefore uses HS_BLE_EV_SELFTEST, which the receiver
+ * names "自检 / 台架测试" and which HS_BLE_FLAG_SIMULATED already describes.
  ****************************************************************************/
 
 #define HS_BLE_EV_NONE          0x00
@@ -159,8 +165,8 @@
 #define HS_BLE_EV_SPO2_LOW      0x04    /* low blood oxygen */
 #define HS_BLE_EV_SLEEP         0x05    /* sleep event */
 #define HS_BLE_EV_LOW_BATTERY   0x06
-#define HS_BLE_EV_MOOD_CHANGE   0x07    /* fused mood verdict flipped */
-#define HS_BLE_EV_SELFTEST      0xff    /* bench/self test event */
+#define HS_BLE_EV_SELFTEST      0xff    /* bench/self test event, incl. the
+                                         * key triggered mood-change debug */
 
 /* Risk levels (byte 8) */
 
