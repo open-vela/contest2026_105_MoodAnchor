@@ -2,6 +2,8 @@
 
 是非钟定位为“智能情绪管理与人际冲突无感干预”的可穿戴产品概念。我们关注的不是对人的情绪下诊断，也不是在事后复盘对错；而是在争执、压力或冲动决策即将升级的临界前数秒，给用户一个低打扰、体面且可自主选择的暂停机会。
 
+原型采用**手表、手机、云端智能服务联动**的形态：手表在端侧采集非语义生理与动作信号并通过 BLE 上报事件；手机承担连接、提醒、记录和交互入口；用户主动发起陪伴对话时，手机再经由受控后端访问云端大语言模型。模型密钥只保存在部署环境，不写入 App 或手表端。
+
 > 本项目用于竞赛原型和交互演示，不提供医疗诊断或心理治疗结论。
 
 ## 产品愿景：在情绪临界点，给人一个暂停键
@@ -107,6 +109,18 @@ OPENVELA_ROOT=/path/to/openvela scripts/build_huangshan.sh
 ```
 
 演示 APK 位于 `artifacts/MoodAnchor-debug-20260915.apk`。`local.properties` 是本机 SDK 配置，已被忽略，需由每位开发者自行创建。
+
+### 云端大模型服务
+
+云端服务是 App 与 Coze / SiliconFlow 等大语言模型之间的受控中转层：部署者在自己的电脑或服务器设置密钥，App 只调用本服务的 `/chat` 接口。进入 `backend/` 后，使用 Python 3 设置所选模型平台的环境变量并启动服务：
+
+```powershell
+$env:COZE_API_KEY = "<your-coze-api-key>"
+$env:COZE_BOT_ID = "<your-published-bot-id>"
+python backend/server.py
+```
+
+启动后可访问 `http://<server-ip>:8000/health` 检查状态；局域网演示时，将 Android App 配置为访问该服务器地址。也可按 [backend/README.md](backend/README.md) 改用 SiliconFlow/Qwen。真实 API Key、`.env`、服务器密码和证书均不得提交到 Git。
 
 ## 演示视频
 
