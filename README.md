@@ -112,12 +112,34 @@ OPENVELA_ROOT=/path/to/openvela scripts/build_huangshan.sh
 
 | 演示内容 | 对应视频 |
 | --- | --- |
-| 黄山派手表与 Android 手机 BLE/GATT 真实连接和状态订阅 | [主演示：手表与手机连接](videos/01_watch_phone_ble_connection.mp4) |
-| 手机连接手表并确认状态 | [设备配对演示](videos/02_watch_phone_pairing.mp4) |
-| 手表确认事件后，Android 状态栏提示 | [事件通知演示](videos/03_android_event_notification.mp4) |
-| Android App 首页和手表连接入口 | [App 首页演示](videos/04_android_app_home.mp4) |
-| Android App 的事件触发与交互 | [App 事件流程演示](videos/05_android_event_flow.mp4) |
-| 情绪日历、铃声和设备状态设置 | [日历与音频设置演示](videos/06_android_calendar_and_audio.mp4) |
+| 黄山派手表与 Android 手机 BLE/GATT 真实连接和状态订阅 | [完整演示视频（主视频，Git LFS 文件导航）](videos/01_watch_phone_ble_connection.mp4) |
+| 手机连接手表并确认状态 | 见下方“设备配对演示”播放器 |
+| 手表确认事件后，Android 状态栏提示 | 见下方“事件通知演示”播放器 |
+| Android App 首页和手表连接入口 | 见下方“App 首页演示”播放器 |
+| Android App 的事件触发与交互 | 见下方“App 事件流程演示”播放器 |
+| 情绪日历、铃声和设备状态设置 | 见下方“日历与音频设置演示”播放器 |
+
+### 可直接播放的分段演示
+
+#### 设备配对演示
+
+https://github.com/user-attachments/assets/e2f21015-0fa6-4112-af10-c110c8390606
+
+#### 事件通知演示
+
+https://github.com/user-attachments/assets/865346d2-2e24-44c7-a382-379679ea1128
+
+#### App 首页演示
+
+https://github.com/user-attachments/assets/f6358fc4-588d-48b1-95fe-a7ebce02dab6
+
+#### App 事件流程演示
+
+https://github.com/user-attachments/assets/c4ca6f70-2def-453b-b568-aeb5bdd7c8c5
+
+#### 日历与音频设置演示
+
+https://github.com/user-attachments/assets/7daae2d2-b47a-4a51-96dd-6ee684ebf6d6
 
 各视频的功能说明和当前演示边界见 [videos/README.md](videos/README.md)。
 
