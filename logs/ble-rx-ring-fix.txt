@@ -1,0 +1,95 @@
+
+=== [12:04:27] port opened ===
+[12:04:27] SFBL
+[12:04:29] AB[12:04:29] CD[0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc0 init[12:04:29] [0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc1 init done, ret=0
+[0m[12:04:30] [0mINFO: LSM6DS3 test device registered as /dev/lsm6dsl0, INT=31
+[0m[0m[33mWARN: skip HAL_FLASH_Init during XIP bringup, NOR write/erase disabled
+[0m[0mINFO: NOR MTD registered at /dev/config0 (offset=2464 blocks=1024)
+[0m[12:04:32] mood_anchor [8:100]
+
+NuttShell (NSH)
+nsh> [K[0m[31;1m[LVGL] [User]	(2.700, +2700)	 check_stack_size: tid: 8, Stack size : 40856 lv_nuttx_entry.c:283
+[0m[0m[31;1m[LVGL] [User]	(2.703, +3)	 lv_nuttx_lcd_create: lcd /dev/lcd0 opening lv_nuttx_lcd.c:77
+[0m[0m[31;1m[LVGL] [User]	(2.705, +2)	 lv_nuttx_lcd_create: lcd /dev/lcd0 open success lv_nuttx_lcd.c:84
+[0m[0m[31;1m[LVGL] [User]	(2.718, +13)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 opening lv_nuttx_touchscreen.c:79
+[0m[0m[31;1m[LVGL] [User]	(2.721, +3)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 open success, maxpoint 1 lv_nuttx_touchscreen.c:98
+[0m[12:04:32] [ui] 1
+MoodAnchor UI running (swipe for SYSTEM / MOOD / MOTION / SOUND / LINK / TUNE); KEY2 fakes an emotion change
+[sim] KEY2 ready: press it to fake an emotion change
+[12:04:33] mood: microphone started
+[12:04:34] [ui] 5
+[12:04:36] [ui] 9
+[12:04:38] [ui] 13
+[12:04:40] [ui] 17
+[12:04:41] mood: agitation marked a false alarm (0/1)
+[12:04:43] [ui] 21
+[12:04:45] [ui] 25
+[12:04:47] [ui] 29
+[12:04:49] [ui] 33
+[12:04:52] [ui] 37
+[12:04:54] [ui] 41
+[12:04:54] hci_initialize: ERROR: BT_HCI_OP_RESET failed: -110
+sf32lb52 bt: LCPU up in 2510 ms
+bt_initialize: ERROR:  hci_initialize failed: -110
+hs_ble_host_start: ERROR: bt_netdev_register failed: -110 (attempt 1)
+[12:04:55] [BLE] NuttX host stack up, controller initialised
+[BLE] advertising as "是非钟-0001", service d38a0001-1234-5678-9abc-def012345678
+[hb] sys=10 imu=89 gsr=44 ble=2 [12:04:56] [ui] 45
+[12:04:57] [hb] sys=11 imu=98 gsr=48 ble=2 peer=0 mood=1/0
+[12:04:58] [ui] 49
+[12:04:59] [hb] sys=12 imu=106 gsr=52 ble=2 peer=0 mood=1/0
+[12:05:00] [ui] 53
+[12:05:01] [hb] sys=13 imu=116 gsr=57 ble=2 peer=0 mood=1/0
+[12:05:02] [ui] 57
+[12:05:03] [hb] sys=14 imu=124 gsr=61 ble=2 peer=0 mood=1/0
+[12:05:04] [ui] 61
+[12:05:05] [hb] sys=15 imu=132 gsr=66 ble=2 peer=0 mood=1/0
+[12:05:06] [ui] 65
+[12:05:07] [hb] sys=16 imu=140 gsr=70 ble=2 peer=0 mood=1/0
+[12:05:08] [ui] 69
+[0m[31m[BT] LE_CONN_COMPLETE: status=0x00 handle=1 role=1 peer=46:1A:C7:3F:A4:2A (random)
+[0mdump_assert_info: Current Version: NuttX  0.0.0 5f713dc903a-dirty Sep 15 2026 01:17:51 arm
+dump_assert_info: Assertion failed panic: at file: ../../nuttx/arch/arm/src/arm_m/arm_hardfault.c:186 task: lpwork process: Kernel 0x12016e69
+up_dump_register: R0: 20004cd0 R1: 000000ba R2: 200048e0  R3: 00000001
+up_dump_register: R4: 20015448 R5: 120ae379 R6: 120af2d6  R7: 2000d418
+up_dump_register: R8: 200048d0 R9: 0000ba
+up_dump_register: R12: 00000000 SP: 2000d220 LR: 12015235  PC: 12015235
+up_dump_register: xPSR: 20000003 BASEPRI: 00000080 CONTROL: 00000000
+up_dump_register: EXC_RETURN: 00000000
+sched_dumpstack: backtrace| 2: 0x12027e40 0x12014cb6 0x12015376 0x12013a9e 0x12013574 0x120377c4 0x12043a1c 0x120a4544
+sched_dumpstack: backtrace| 2: 0x120a46ac 0x120ac6d2 0x120a9766 0x120a90bc 0x12016db2 0x12016eac 0x120168f4
+dump_tasks:    PID GROUP PRI POLICY   TYPE    NPX STATE   EVENT      SIGMASK          STACKBASE  STACKSIZE   COMMAND
+dump_task:       0     0   0 FIFO     Kthread -   Ready              0000000000000000 0x2001447c      1968   CPU0 IDLE
+dump_task:       1     0 224 RR       Kthread -   Waiting Signal     0000000000000000 0x20005970     15968   hpwork 0x200004c0 0x20000508
+dump_task:       2     0 100 RR       Kthread -   Running            0000000000000000 0x20009850     15968   lpwork 0x20000540 0x20000588
+dump_task:      20     0 100 RR       Kthread -   Waiting MQ empty   0000000000000000 0x60067610      8088   BT_HCI_Tx
+dump_task:       5     5 100 RR       Task    -   Waiting Semaphore  0000000000000000 0x2001f2d0     15992   nsh_main
+dump_task:      22     8 120 RR       pthread -   Waiting Signal     0000000000000000 0x60069600     12208   mood_anchor [12:05:08] 0x12072811 0
+dump_task:       8     8 100 RR       Task    -   Waiting Semaphore  fffffffffff7fdff 0x60000078     40856   mood_anchor
+dump_task:       9     8 100 RR       pthread -   Waiting Signal     0000000000000000 0x2007c808      2992   mood_anchor 0x12073419 0
+dump_task:      10     8 100 RR       pthread -   Waiting Signal     0000000000000000 0x2007d500      2992   mood_anchor 0x12073639 0
+dump_task:      11     8 100 RR       pthread -   Ready              000000000      12     8 100 RR       pthread -   Ready              00000x12073485 0
+dump_task:      13     8 100 RR       pthread -   Wa   mood_anchor 0x12072361 0
+sched_dumpstack: backtrace| 0: 0x120sched_dumpstack: backtrace| 1: 0x12015a74 0x12019c5c 0x12061640 0x1204f752 0x120293f6 0x12016db2 0x12016eac 0x120168f4
+sched_dumpstack: backtrace| 2: 0x12027e40 0x12014cb6 0x12015964 0x1201539c 0x12013a9e 0x12013574 0x120377c4 0x12043a1c
+sched_dumpstack: backtrace| 2: 0x120a4544 0x120a46ac 0x120ac6d2 0x120a9766 0x120a90bc 0x12016db2 0x12016eac 0x120168f4
+sched_dumpstack: backtrace|20: 0x12015a74 0x120a7046 0x120a6e12 0x120a6eba 0x120ac6f6 0x120a80cc 0x120168f4
+sched_dumpstack: backtrace| 5: 0x12015a74 0x12015c4c 0x12030de2 0x1203ee38 0x1203ee7a 0x1203ee9e 0x1203eec6 0x1201c0f2
+sched_dumpstack: backtrace| 5: 0x1201c1dc 0x1201c16a 0x12020966 0x1201c05a 0x1201b3e2 0x1204c780 0x120168e0
+sched_dumpstack: backtrace|22: 0x12015a74 0x12019c5c 0x12061640 0x1204f6ee 0x1207293c 0x120a4ffc 0x120a71ec
+sched_dumpstack: backtrace| 8: 0x12015a74 0x12015c4c 0x12060e40 0x1203ed80 0x120a18f8 0x120a0bec 0x12074642 0x1204c780
+sched_dumpstack: backtrace| 8: 0x120168e0
+sched_dumpstack: backtrace| 9: 0x12015a74 0x12019c5c 0x12061640 0x1204f6ee 0x12073444 0x120a4ffc 0x120a71ec
+sched_dumpstack: backtrace|10: 0x12015a74 0x12019c5c 0x12061640 0x1204f752 0x12073674 0x120a4ffc 0x120a71ec
+sched_dumpstack: backtrace|11: 0x12015a74 0x12015c4c 0x12060e40 0x1202368c 0x12035340 0x1202f464 0x1202f4f2 0x1203e3e4
+sched_dumpstack: backtrace|11: 0x1203e610 0x12071aac 0x120736c2 0x120a4ffc 0x120a71ec
+sched_dumpstack: backtrace|12: 0x1201043e 0x12010496 0x12023960 0x1203e3e4 0x1203e610 0x12071900 0x120719ba 0x120734b8
+sched_dumpstack: backtrace|12: 0x120a4ffc 0x120a71ec
+sched_dumpstack: backtrace|13: 0x12015a74 0x12019c5c 0x12061640 0x1204f6ee 0x12073568 0x120a4ffc 0x120a71ec
+sched_dumpstack: backtrace|14: 0x12015a74 0x12019c5c 0x12061640 0x1204f752 0x12072440 0x120a4ffc 0x120a71ec
+
+=== [12:05:14] NO OUTPUT for 6 s ===

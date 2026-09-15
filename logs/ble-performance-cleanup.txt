@@ -1,0 +1,26 @@
+
+=== [14:48:13] port opened ===
+[14:48:13] SFBL
+[14:48:16] AB[14:48:16] CD[0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc0 init done, ret=0
+[0m[14:48:16] [0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc1 init done, ret=0
+[0m[14:48:17] [0mINFO: LSM6DS3 test device registered as /dev/lsm6dsl0, INT=31
+[0m[0m[33mWARN: skip HAL_FLASH_In[0m[0mINFO: NOR MTD registered at /dev/config0 (offset=2464 bl[14:48:19] mood_anchor [8:100]
+
+NuttShell (NSH)
+nsh> [K[0m[31;1m[LVGL] [User]	(2.700, +2700)	 check_stack_size: tid: 8, Stack size : 40856 lv_nuttx_entry.c:283
+[0m[0m[31;1m[LVGL] [User]	(2.703, +3)	 lv_nuttx_lcd_create: lcd /dev/lcd0 opening lv_nuttx_lcd.c:77
+[0m[0m[31;1m[LVGL] [User]	(2.705, +2)	 lv_nuttx_lcd_create: lcd /dev/lcd0 open success lv_nuttx_lcd.c:84
+[0m[0m[31;1m[LVGL] [User]	(2.718, +13)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 opening lv_nuttx_touchscreen.c:79
+[0m[0m[31;1m[LVGL] [User]	(2.721, +3)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 open success, maxpoint 1 lv_nuttx_touchscreen.c:98
+[0m[14:48:19] MoodAnchor UI running (swipe for SYSTEM / MOOD / MOTION / SOUND / LINK / TUNE); KEY2 fakes an emotion change
+[sim] KEY2 ready: press it to fake an emotion change
+[14:48:20] mood: microphone started
+
+=== [14:48:26] NO OUTPUT for 6 s ===
+[14:48:38] mood: agitation marked a false alarm (0/1)
+
+=== [14:48:44] NO OUTPUT for 6 s ===

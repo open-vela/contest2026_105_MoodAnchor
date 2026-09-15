@@ -151,11 +151,9 @@
 /****************************************************************************
  * Event types (byte 1)
  *
- * The phone side is fixed and must not be changed to accommodate us: its
- * eventName() mapping is exactly the set below.  Any other value shows up on
- * the phone as "未知事件", so do not invent new types here.  A bench or
- * simulated trigger therefore uses HS_BLE_EV_SELFTEST, which the receiver
- * names "自检 / 台架测试" and which HS_BLE_FLAG_SIMULATED already describes.
+ * Keep this list in step with WatchBleService.eventName().  A bench or
+ * simulated trigger uses HS_BLE_EV_SELFTEST, while 0x07/0x08 carry the
+ * wearer's answer to the on-watch agitation confirmation dialog.
  ****************************************************************************/
 
 #define HS_BLE_EV_NONE          0x00
@@ -165,6 +163,8 @@
 #define HS_BLE_EV_SPO2_LOW      0x04    /* low blood oxygen */
 #define HS_BLE_EV_SLEEP         0x05    /* sleep event */
 #define HS_BLE_EV_LOW_BATTERY   0x06
+#define HS_BLE_EV_MOOD_CONFIRMED 0x07   /* wearer confirmed agitation */
+#define HS_BLE_EV_MOOD_FALSE     0x08   /* wearer marked agitation false */
 #define HS_BLE_EV_SELFTEST      0xff    /* bench/self test event, incl. the
                                          * key triggered mood-change debug */
 
@@ -537,39 +537,5 @@ const uint8_t *hs_ble_status_last(void);
  ****************************************************************************/
 
 void hs_ble_adv_service(void);
-
-/****************************************************************************
- * Name: hs_ble_trace / hs_ble_trace_last
- *
- * Description:
- *   TEMPORARY BRING-UP DIAGNOSTIC.
- *
- *   The Bluetooth link freezes the whole system the moment a central
- *   connects, and the serial console in this environment drops out far too
- *   often to be trusted with catching the crash dump.  The screen, however,
- *   keeps showing the last frame it managed to draw - so the trace code is
- *   rendered there and the frozen frame becomes the evidence.
- *
- *   Each step writes its code *before* the risky call, so the value on
- *   screen during a hang is the step that was running, not the last one that
- *   completed.
- *
- *   Remove both functions once the freeze is fixed.
- *
- ****************************************************************************/
-
-#define HS_BLE_TRACE_OFF        0
-#define HS_BLE_TRACE_SWITCH     1    /* switch tapped, bringing the host up */
-#define HS_BLE_TRACE_HOST_UP    2    /* host stack running */
-#define HS_BLE_TRACE_GATT       3    /* GATT database installed */
-#define HS_BLE_TRACE_ADV        4    /* advertising enabled */
-#define HS_BLE_TRACE_CCC_SUB    5    /* peer wrote the CCC descriptor */
-#define HS_BLE_TRACE_CCC_UNSUB  6
-#define HS_BLE_TRACE_SEND_DATA  7    /* about to notify the data characteristic */
-#define HS_BLE_TRACE_SEND_STAT  8    /* about to notify the status one */
-#define HS_BLE_TRACE_SENT       9    /* the burst went out, loop complete */
-
-void hs_ble_trace(int code);
-int  hs_ble_trace_last(void);
 
 #endif /* __APP_HUANGSHAN_HAL_HS_BLE_H */

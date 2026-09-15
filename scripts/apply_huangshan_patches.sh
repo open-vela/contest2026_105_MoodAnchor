@@ -43,8 +43,16 @@ apply_one "$nuttx_dir" \
   "$repo_dir/patches/nuttx-armv8m-fpscr.patch" \
   "NuttX ARMv8-M FPSCR/SysTick 修复"
 
+apply_one "$nuttx_dir" \
+  "$repo_dir/patches/nuttx-ble-log-load.patch" \
+  "NuttX BLE 逐包日志负载修复"
+
 apply_one "$sifli_dir" \
   "$repo_dir/patches/vendor-sifli-huangshan.patch" \
   "黄山派 GSR、供电检测、LCD 冷启动及自动面板支持"
+
+apply_one "$sifli_dir" \
+  "$repo_dir/patches/vendor-sifli-ble-host-stability.patch" \
+  "SF32LB52 蓝牙 host 冷启动与 RX 共享环保护"
 
 echo "补丁准备完成：$openvela_root"

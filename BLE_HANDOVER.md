@@ -32,17 +32,23 @@
 1. **整机冻结**（画面定住、触摸无响应）—— 断言停机
 2. **卡在 `bt_netdev_register`**（画面还能动，但状态永远不变）—— 死锁
 3. **FAILED**，日志 `-110`（ETIMEDOUT）—— 超时正常上报
-4. **硬错误**（当前）—— `arm_hardfault.c:186`，PC 落在 `ma_ble_start_worker`
+4. **硬错误**（已定位并修复）—— RX 共享环越界，PC 落在 `memcpy`
 
-当前（最新一次烧录）是第 4 种。日志：
+最新一次旧固件烧录是第 4 种。日志：
 
 ```
 [00:43:46] sf32lb52 bt: LCPU up in 1560 ms
 [00:43:46] Assertion failed padfault.c:186 task: mood_anchor process: mood_anchor 0x12072f55
 ```
 
-`addr2line 0x12072f55` → `ma_ble_start_worker (mood_anchor_main.c:2699)`，
-而 2699 行是 `ret = hs_ble_host_start();`。也就是**硬错误发生在 host 启动内部**。
+注意：`0x12072f55` 是 dump 中的 pthread 入口地址，不是故障 PC。按 dump 的
+任务回溯还原，真正的故障路径是
+`hpwork -> sf32lb52_bt_rx_worker -> sf32lb52_bt_ring_copy -> memcpy`。
+根因是 RX worker 未校验 LCPU 共享环的瞬态非法头/下标便执行拷贝，已通过
+`patches/vendor-sifli-ble-host-stability.patch` 增加边界校验和有限重试。
+首次实机验证后 RX 崩溃已消失，host 能广播且手机能发起连接；随后定位到旧的
+3 次 `bt_netdev_register()` 重试会在首次 Reset 超时后留下悬空回调。当前代码已
+将 LCPU 冷启动移到 HCI 超时之前，并移除整套 host 重试，第二版已编译成功。
 
 ---
 

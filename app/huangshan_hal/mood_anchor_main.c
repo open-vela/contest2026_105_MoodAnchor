@@ -197,11 +197,6 @@ static lv_obj_t *g_lbl_temp;
 static lv_obj_t *g_sw_ble;
 static lv_obj_t *g_lbl_ble_state;
 static lv_obj_t *g_lbl_ble_info;
-
-/* TEMPORARY: the last BLE step, shown on the LINK page so a freeze leaves a
- * readable trace on screen when the console cannot be reached. */
-
-static lv_obj_t *g_lbl_ble_trace;
 static lv_obj_t *g_lbl_ble_stage;
 
 /* Arousal confirmation.
@@ -216,8 +211,10 @@ static lv_obj_t *g_lbl_ble_stage;
 static pthread_mutex_t        g_mood_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct hs_mood_result_s g_mood_result;
 static volatile bool          g_mood_ask;         /* prompt requested */
-static volatile int           g_mood_confirmed;
-static volatile int           g_mood_false;
+/* Result of the most recent on-watch confirmation prompt.  The UI callback
+ * only records it; the BLE data thread emits the notification so a click
+ * never executes a blocking HCI command on the LVGL thread. */
+static volatile int           g_mood_feedback_pending;
 static lv_obj_t              *g_mood_box;         /* open dialog, or NULL */
 static pthread_t              g_mood_thread;
 
@@ -259,22 +256,6 @@ static pthread_t        g_sys_thread;
 static pthread_t        g_mic_thread;
 static pthread_t        g_gsr_thread;
 
-/* TEMPORARY BRING-UP INSTRUMENTATION.
- *
- * The Bluetooth link freezes the system on connect and the serial console
- * cannot be relied on to capture it, so the worker threads tick these
- * counters and the BLE data thread prints them once a second.  When the
- * freeze happens the last heartbeat says which threads were still running,
- * which separates "the whole system hung" from "only the render thread hung".
- *
- * Remove once the freeze is fixed.
- */
-
-static volatile uint32_t g_tick_sys;
-static volatile uint32_t g_tick_imu;
-static volatile uint32_t g_tick_gsr;
-static volatile uint32_t g_hb_seq;
-
 /* Latest samples */
 
 /* Latest GSR reading and the classification parameters.
@@ -299,6 +280,7 @@ static volatile uint8_t  g_ble_gsr_ok;
 
 static bool        g_ble_data_run;
 static pthread_t   g_ble_thread;
+static bool        g_ble_thread_started;
 
 /* Bench trigger: pressing the on-board key fakes an emotion change so the
  * phone side can be exercised without real sensor input.  The override is
@@ -955,10 +937,8 @@ static void ma_refresh_ble_ui(void)
 {
   static int  last_state = -1;
   static bool last_peer;
-  static int  last_trace = -1;
   bool        peer;
   int         state = g_ble_state;
-  int         trace = hs_ble_trace_last();
 
   if (g_lbl_ble_state == NULL || g_sw_ble == NULL)
     {
@@ -966,15 +946,6 @@ static void ma_refresh_ble_ui(void)
     }
 
   peer = hs_ble_gatt_peer_connected();
-
-  /* TEMPORARY: the trace is refreshed on its own so that it keeps up even
-   * when nothing else about the state changes. */
-
-  if (g_lbl_ble_trace != NULL && trace != last_trace)
-    {
-      last_trace = trace;
-      lv_label_set_text_fmt(g_lbl_ble_trace, "trace %d", trace);
-    }
 
   /* Refreshed every tick, not only on a state change: the stage text and the
    * heap figure are what matter when something goes wrong, and they move
@@ -1114,21 +1085,6 @@ static void ma_build_link_page(lv_obj_t *tile)
   lv_obj_align(g_lbl_ble_info, LV_ALIGN_TOP_MID, 0, 190);
   lv_label_set_text(g_lbl_ble_info,
                     "Tap the switch to advertise\nas a BLE peripheral");
-
-  /* TEMPORARY diagnostic read-out.  Whatever this says when the screen
-   * freezes is the step that was running. */
-
-  g_lbl_ble_trace = lv_label_create(tile);
-  lv_obj_set_style_text_color(g_lbl_ble_trace, lv_color_hex(MA_COLOR_MUTED),
-                              0);
-  lv_obj_set_style_text_font(g_lbl_ble_trace, &lv_font_montserrat_16, 0);
-  lv_obj_align(g_lbl_ble_trace, LV_ALIGN_TOP_MID, 0, 270);
-  lv_label_set_text(g_lbl_ble_trace, "trace 0");
-
-  /* TEMPORARY: the bring-up stage in words, plus the free heap.  The picture
-   * freezes at the moment of a fault, so whatever these say when it stops is
-   * the whole diagnosis - no serial console needed.
-   */
 
   g_lbl_ble_stage = lv_label_create(tile);
   lv_obj_set_style_text_color(g_lbl_ble_stage, lv_color_hex(MA_COLOR_ACCENT),
@@ -1321,8 +1277,6 @@ static FAR void *ma_sys_thread(FAR void *arg)
           g_vbat_mv = mv;
         }
 
-      g_tick_sys++;
-
       sleep(2);
     }
 
@@ -1446,8 +1400,6 @@ static FAR void *ma_imu_thread(FAR void *arg)
           g_imu_valid  = true;
           pthread_mutex_unlock(&g_imu_lock);
         }
-
-      g_tick_imu++;
 
       usleep(100000);
     }
@@ -1730,8 +1682,6 @@ static FAR void *ma_gsr_thread(FAR void *arg)
           g_ble_gsr_ok = 1;
         }
 
-      g_tick_gsr++;
-
       usleep(200000);
     }
 
@@ -2006,22 +1956,9 @@ static void ma_read_motion(void)
 
 static void ma_refresh_timer(lv_timer_t *timer)
 {
-  static uint32_t ui_tick;
   lv_obj_t *tile = lv_tileview_get_tile_active(g_tileview);
 
   (void)timer;
-
-  /* TEMPORARY: the LVGL thread is the only one that can freeze the picture
-   * on screen, so it needs its own heartbeat to tell "the UI thread stopped"
-   * apart from "the UI thread is fine but the panel is not being flushed".
-   * Paired with [hb] from the BLE thread this pinpoints which side wedged.
-   * Remove together with hs_ble_trace().
-   */
-
-  if ((ui_tick++ % (2000 / MA_REFRESH_MS)) == 0)
-    {
-      printf("[ui] %lu\n", (unsigned long)ui_tick);
-    }
 
   /* Expire the key trigger's faked verdict.  This runs on the UI timer
    * rather than on the BLE data thread so the override does not stay armed
@@ -2212,7 +2149,8 @@ static void ma_mood_start(void)
  *
  * Description:
  *   The wearer judged the prompt: the arousal was real, or the fusion got it
- *   wrong.  Counting the two apart is the point of asking at all.
+ *   wrong.  Keep this callback strictly non-blocking because it runs in the
+ *   LVGL render/input thread.
  *
  ****************************************************************************/
 
@@ -2223,27 +2161,24 @@ static void ma_mood_answer_event(lv_event_t *event)
 
   if (answer != 0)
     {
-      g_mood_confirmed++;
-      printf("mood: agitation confirmed (%d) / false alarm (%d)\n",
-             g_mood_confirmed, g_mood_false);
+      g_mood_feedback_pending = 1;
     }
   else
     {
-      g_mood_false++;
-      printf("mood: agitation marked a false alarm (%d/%d)\n",
-             g_mood_confirmed, g_mood_false);
+      g_mood_feedback_pending = -1;
     }
 
   if (box != NULL)
     {
       g_mood_box = NULL;
 
-      /* Closing from inside the dialog's own event needs the deferred form:
-       * deleting it here would free the object whose callback is still on
-       * the stack.
+      /* LVGL's own message-box close-button callback closes synchronously,
+       * and its event dispatcher safely handles deletion of the current
+       * target.  Doing the same here avoids an allocation plus a later
+       * async-timer pass, so the answer feels immediate.
        */
 
-      lv_msgbox_close_async(box);
+      lv_msgbox_close(box);
     }
 }
 
@@ -2433,8 +2368,19 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
 
   hs_mood_init();
 
-  while (g_ble_data_run)
+  while (g_sys_run)
     {
+      /* Keep one publisher thread for the lifetime of the application.
+       * Stopping BLE pauses it; starting BLE wakes the same thread.  A
+       * detached thread per switch cycle races when OFF/ON is toggled
+       * quickly and can leave two publishers issuing HCI commands. */
+
+      if (!g_ble_data_run)
+        {
+          usleep(100000);
+          continue;
+        }
+
       memset(&sample, 0, sizeof(sample));
 
       /* Inputs first: the BLE packet carries the raw values, so this thread
@@ -2483,20 +2429,6 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
       /* --- fusion ------------------------------------------------------- */
 
       sample.gyro_dps10 = (uint16_t)result.gyro_mag_dps10;
-      /* Heartbeat: see the note on g_tick_sys.  Two seconds is enough to see
-       * where it stops while still keeping the console link busy, which is
-       * what stops the USB adapter from dropping during the idle periods.
-       */
-
-      if ((g_hb_seq++ & 1u) == 0)
-        {
-          printf("[hb] sys=%lu imu=%lu gsr=%lu ble=%d peer=%d mood=%d/%d\n",
-                 (unsigned long)g_tick_sys, (unsigned long)g_tick_imu,
-                 (unsigned long)g_tick_gsr, g_ble_state,
-                 (int)hs_ble_gatt_peer_connected(), (int)result.agitated,
-                 result.confidence);
-        }
-
       /* The key is polled here as well so that the SYSTEM page's sensor
        * inventory stays honest - a node that exists but never answers should
        * show up as IDLE rather than as working.
@@ -2530,13 +2462,30 @@ static FAR void *ma_ble_data_thread(FAR void *arg)
       sample.agitated   = result.agitated;
       sample.confidence = (uint8_t)result.confidence;
 
-      hs_ble_trace(HS_BLE_TRACE_SEND_DATA);
       hs_ble_data_notify(&sample);
 
-      hs_ble_trace(HS_BLE_TRACE_SEND_STAT);
       hs_ble_status_notify(&sample);
 
-      hs_ble_trace(HS_BLE_TRACE_SENT);
+      /* Forward the wearer's answer to the phone as a distinct event.  This
+       * is consumed by the Android receiver as an update to the original
+       * agitation notification.  Keep HCI work off the LVGL callback. */
+
+      if (g_mood_feedback_pending != 0 && hs_ble_gatt_peer_connected())
+        {
+          int feedback = g_mood_feedback_pending;
+          uint8_t event_type = feedback > 0 ? HS_BLE_EV_MOOD_CONFIRMED
+                                            : HS_BLE_EV_MOOD_FALSE;
+          uint8_t risk = feedback > 0 ? HS_BLE_RISK_HIGH : HS_BLE_RISK_LOW;
+          struct hs_mood_result_s answer_result;
+
+          pthread_mutex_lock(&g_mood_lock);
+          answer_result = g_mood_result;
+          pthread_mutex_unlock(&g_mood_lock);
+
+          g_mood_feedback_pending = 0;
+          (void)hs_ble_event_notify(event_type, risk,
+                                    (uint8_t)answer_result.confidence, 0);
+        }
 
       /* The controller stops advertising as soon as a phone connects and
        * never resumes it by itself: re-arm it after a disconnect.
@@ -2570,13 +2519,11 @@ static FAR void *ma_ble_start_worker(FAR void *arg)
   ret = hs_ble_host_start();
   if (ret >= 0)
     {
-      hs_ble_trace(HS_BLE_TRACE_HOST_UP);
       hs_ble_stage("gatt_start");
       ret = hs_ble_gatt_start(NULL);
 
       if (ret >= 0)
         {
-          hs_ble_trace(HS_BLE_TRACE_GATT);
           hs_ble_stage("adv on, worker next");
         }
     }
@@ -2591,7 +2538,7 @@ static FAR void *ma_ble_start_worker(FAR void *arg)
 
   g_ble_data_run = true;
 
-  if (pthread_attr_init(&attr) == 0)
+  if (!g_ble_thread_started && pthread_attr_init(&attr) == 0)
     {
       /* 4 KB was too tight.  Every second this thread pushes a notification
        * through bt_gatt_notify(), which is not a shallow call: GATT -> ATT ->
@@ -2604,6 +2551,7 @@ static FAR void *ma_ble_start_worker(FAR void *arg)
       pthread_attr_setstacksize(&attr, 12288);
       if (pthread_create(&g_ble_thread, &attr, ma_ble_data_thread, NULL) == 0)
         {
+          g_ble_thread_started = true;
           pthread_detach(g_ble_thread);
         }
 
@@ -2620,7 +2568,6 @@ static FAR void *ma_ble_start_worker(FAR void *arg)
 
 static void ma_ble_start_async(void)
 {
-  hs_ble_trace(HS_BLE_TRACE_SWITCH);
   hs_ble_stage("switch tapped");
 
   /* Put the first stage on the panel right now.  The bring-up worker starts

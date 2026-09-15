@@ -1,0 +1,68 @@
+
+=== [12:18:38] port opened ===
+[12:18:38] SFBL
+[12:18:40] AB[12:18:40] CD[0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc0 init done, ret=0
+[0m[12:18:40] [0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc1 init done, ret=0
+[0m[12:18:41] [0mINFO: LSM6DS3 test device registered as /dev/lsm6dsl0, INT=31
+[0m[0m[33mWARN: skip HAL_FLASH_Init during XIP bringup, NOR write/erase disabled
+[0m[0mINFO: NOR MTD registered at /dev/config0 (offset=2464 blocks=1024)
+[0m[12:18:43] mood_anchor [8:100]
+
+NuttShell (NSH)
+nsh> [K[0m[31;1m[LVGL] [User]	(2.700, +2700)	 check_stack_size: tid: 8, Stack size : 40856 lv_nuttx_entry.c:283
+[0m[0m[31;1m[LVG[0m[31;1m[LVGL] [User]	(2.705, +2)	 lv_nuttx_lcd_create: lcd /dev/lcd0 open success lv_nuttx_lcd.c:84
+[0m[0m[31;1m[LVGL] [User]	(2.718, +13)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 opening lv_nuttx_touchscreen.c:79
+[0m[0m[31;1m[LVGL] [User]	(2.722, +4)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 open success, maxpoint 1 lv_nuttx_touchscreen.c:98
+[0m[12:18:43] [ui] 1
+MoodAnchor UI running (swipe for SYSTEM / MOOD / MOTION / SOUND / LINK / TUNE); KEY2 fakes an emotion change
+[sim] KEY2 ready: press it to fake an emotion change
+[12:18:44] mood: microphone started
+[12:18:45] [ui] 5
+[12:18:47] [ui] 9
+[12:18:49] [ui] 13
+[12:18:51] [ui] 17
+[12:18:54] [ui] 21
+[12:18:54] mood: agitation confirmed (1) / false alarm (0)
+[12:18:56] [ui] 25
+[12:18:58] [ui] 29
+[12:19:00] [ui] 33
+[12:19:02] [ui] 37
+[12:19:04] [ui] 41
+[12:19:06] [ui] 45
+[12:19:08] [ui] 49
+[12:19:11] [ui] 53
+[12:19:13] [ui] 57
+[12:19:15] [ui] 61
+[12:19:17] [ui] 65
+[12:19:19] [ui] 69
+[12:19:21] [ui] 73
+[12:19:23] [ui] 77
+[12:19:25] [ui] 81
+[12:19:27] [ui] 85
+[12:19:29] [ui] 89
+[12:19:31] [ui] 93
+[12:19:33] [ui] 97
+[12:19:35] [ui] 101
+[12:19:37] [ui] 105
+[12:19:39] [ui] 109
+[12:19:42] [ui] 113
+[12:19:44] [ui] 117
+[12:19:46] [ui] 121
+[12:19:48] [ui] 125
+[12:19:50] [ui] 129
+[12:19:52] [ui] 133
+[12:19:54] [ui] 137
+[12:19:56] [ui] 141
+[12:19:58] [ui] 145
+[12:20:00] [ui] 149
+[12:20:02] [ui] 153
+[12:20:04] [ui] 157
+[12:20:06] [ui] 161
+[12:20:08] [ui] 165
+[12:20:10] [ui] 169
+[12:20:12] [ui] 173
+[12:20:14] [ui] 177

@@ -1,0 +1,13 @@
+diff --git a/wireless/bluetooth/bt_conn.c b/wireless/bluetooth/bt_conn.c
+index fb7e520b726..45bf5d130d0 100644
+--- a/wireless/bluetooth/bt_conn.c
++++ b/wireless/bluetooth/bt_conn.c
+@@ -420,7 +420,7 @@ void bt_conn_send(FAR struct bt_conn_s *conn, FAR struct bt_buf_s *buf)
+ 
+   sq_init(&fraglist);
+ 
+-  wlwarn("conn handle %u buf len %u\n", conn->handle, buf->len);
++  wlinfo("conn handle %u buf len %u\n", conn->handle, buf->len);
+ 
+   if (conn->state != BT_CONN_CONNECTED)
+     {

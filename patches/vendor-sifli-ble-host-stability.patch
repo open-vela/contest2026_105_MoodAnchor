@@ -1,0 +1,184 @@
+diff --git a/chips/sf32lb52/sf32lb52_bt_adapter.c b/chips/sf32lb52/sf32lb52_bt_adapter.c
+index 302704c..72b418c 100644
+--- a/chips/sf32lb52/sf32lb52_bt_adapter.c
++++ b/chips/sf32lb52/sf32lb52_bt_adapter.c
+@@ -133,8 +133,8 @@ static bool sf32lb52_bt_rx_ring_valid(struct circular_buf *rx_ring)
+   long buf_size = rx_ring->buffer_size;
+ 
+   return buf_size == (long)SF32LB52_BT_RING_DATA_SIZE &&
+-         rd_idx <= SF32LB52_BT_RING_DATA_SIZE &&
+-         wr_idx <= SF32LB52_BT_RING_DATA_SIZE;
++         rd_idx < SF32LB52_BT_RING_DATA_SIZE &&
++         wr_idx < SF32LB52_BT_RING_DATA_SIZE;
+ }
+ 
+ static bool sf32lb52_bt_rx_ring_ready(const char *tag)
+@@ -263,15 +263,21 @@ static size_t sf32lb52_bt_ring_copy(uint8_t *dst,
+                                     size_t len)
+ {
+   const uint8_t *pool = (const uint8_t *)(rx_ring + 1);
++  uint32_t buffer_size = (uint32_t)rx_ring->buffer_size;
+   uint32_t rd_idx = CB_GET_PTR_IDX(rd_ptr);
+   size_t tail;
+ 
+-  if (len == 0)
++  /* The ring header is shared with the LCPU.  A mailbox interrupt may arrive
++   * while the controller is still rebuilding that header after power-up.
++   * Never turn a transient/corrupt index into an unchecked memcpy address. */
++
++  if (buffer_size != SF32LB52_BT_RING_DATA_SIZE ||
++      rd_idx >= buffer_size || len == 0 || len > buffer_size)
+     {
+       return 0;
+     }
+ 
+-  tail = rx_ring->buffer_size - rd_idx;
++  tail = buffer_size - rd_idx;
+   if (tail >= len)
+     {
+       memcpy(dst, &pool[rd_idx], len);
+@@ -445,6 +451,7 @@ static void sf32lb52_bt_rx_worker(FAR void *arg)
+           size_t read_len;
+           int ret;
+           struct circular_buf *rx_ring;
++          uint32_t buffer_size;
+           uint32_t wr_ptr;
+ 
+           flags = enter_critical_section();
+@@ -474,10 +481,36 @@ static void sf32lb52_bt_rx_worker(FAR void *arg)
+             }
+ 
+           rx_ring = (struct circular_buf *)SF32LB52_BT_RX_BUF_ADDR;
++          buffer_size = (uint32_t)rx_ring->buffer_size;
+           wr_ptr = rx_ring->write_idx_mirror;
++
++          /* The controller can signal the mailbox before its shared ring
++           * header is coherent.  The old code used buffer_size and both
++           * indices without validating them; a bad rd_idx then reached
++           * sf32lb52_bt_ring_copy() and faulted in memcpy, freezing the
++           * entire device as soon as BLE was enabled. */
++
++          if (buffer_size != SF32LB52_BT_RING_DATA_SIZE ||
++              CB_GET_PTR_IDX(env->rx_read_idx_mirror) >= buffer_size ||
++              CB_GET_PTR_IDX(rx_ring->read_idx_mirror) >= buffer_size ||
++              CB_GET_PTR_IDX(wr_ptr) >= buffer_size)
++            {
++              leave_critical_section(flags);
++
++              if (empty_retries++ < 20)
++                {
++                  usleep(1000);
++                  continue;
++                }
++
++              syslog(LOG_ERR,
++                     "sf32lb52 bt rx ring invalid while draining\n");
++              break;
++            }
++
+           size = sf32lb52_bt_ring_data_len(env->rx_read_idx_mirror,
+                                           wr_ptr,
+-                                          rx_ring->buffer_size);
++                                          buffer_size);
+           if (size == 0)
+             {
+               uint32_t rd_ptr = rx_ring->read_idx_mirror;
+@@ -517,7 +550,7 @@ static void sf32lb52_bt_rx_worker(FAR void *arg)
+             }
+ 
+           env->rx_read_idx_mirror = sf32lb52_bt_ring_advance(
+-              env->rx_read_idx_mirror, read_len, rx_ring->buffer_size);
++              env->rx_read_idx_mirror, read_len, buffer_size);
+           rx_ring->read_idx_mirror = env->rx_read_idx_mirror;
+           __DSB();
+ 
+@@ -1001,6 +1034,28 @@ int sf32lb52_host_send_packet(const uint8_t *data, uint16_t len)
+       wr_ptr = tx_ring->write_idx_mirror;
+       sf32lb52_bt_trigger_tx();
+       chunks++;
++
++      /* The LCPU IPC transport treats the first H4 byte as one indication
++       * and the HCI body as the following indication.  Merely writing the
++       * type byte first is not enough: if the second write reaches the ring
++       * before LCPU drains the first interrupt, both writes are coalesced
++       * and the controller parses (type, opcode-low) as the opcode.  For
++       * example 01 08 20 (H4 CMD, LE Set Advertising Data) is then reported
++       * back as the bogus completed opcode 0x0801.
++       *
++       * Preserve the indication boundary by waiting for each non-final
++       * chunk to be consumed before publishing the next one.  The TX mutex
++       * remains held, so an ACL sender cannot enter between the H4 type and
++       * its body. */
++
++      if (remaining > 0)
++        {
++          ret = sf32lb52_bt_wait_tx_idle(tx_ring);
++          if (ret < 0)
++            {
++              goto out;
++            }
++        }
+     }
+ 
+ #if SF32LB52_BT_TRACE
+diff --git a/chips/sf32lb52/sf32lb52_bth4.c b/chips/sf32lb52/sf32lb52_bth4.c
+index 49796cc..976e2f2 100644
+--- a/chips/sf32lb52/sf32lb52_bth4.c
++++ b/chips/sf32lb52/sf32lb52_bth4.c
+@@ -167,7 +167,7 @@ static void sf32lb52_bt_close(struct bt_driver_s *drv);
+ static int sf32lb52_bt_recv_cb(uint8_t *data, uint16_t len);
+ static int sf32lb52_bt_ensure_controller_enabled(uint16_t opcode);
+ 
+-#ifdef CONFIG_BT
++#if defined(CONFIG_BT) && defined(CONFIG_ZBLUE)
+ extern void z_sys_init(void);
+ 
+ static bool g_sf32lb52_zblue_inited;
+@@ -651,7 +651,13 @@ static int sf32lb52_bt_open(struct bt_driver_s *drv)
+       return ret;
+     }
+ 
+-  return OK;
++  /* Boot the LCPU before hci_initialize() starts its first 2.5 second
++   * synchronous-command timeout.  A cold boot takes about 2.5 seconds on
++   * this board; doing it lazily from send() consumes the whole Reset budget
++   * and forces bt_netdev_register() down an unsafe retry path.  RX remains
++   * suppressed until the first host command, so boot chatter is discarded. */
++
++  return sf32lb52_bt_controller_enable();
+ }
+ 
+ static void sf32lb52_bt_close(struct bt_driver_s *drv)
+@@ -689,3 +695,15 @@ int sf32lb52_bt_initialize(void)
+ 
+   return OK;
+ }
++
++/* Return the vendor HCI driver so the host stack can be bound directly to
++ * the controller (the standard openvela BTH4 architecture): the driver
++ * already frames H:4 on send and hands complete HCI packets to
++ * bt_netdev_receive() on receive.  Going through the /dev/ttyHCI0
++ * character device and re-implementing H:4 on top of it is not needed.
++ */
++
++struct bt_driver_s *sf32lb52_bt_get_driver(void)
++{
++  return &g_sf32lb52_bt_priv.drv;
++}
+diff --git a/chips/sf32lb52/sifli_allocateheap.c b/chips/sf32lb52/sifli_allocateheap.c
+index 3905f99..0b7e66b 100644
+--- a/chips/sf32lb52/sifli_allocateheap.c
++++ b/chips/sf32lb52/sifli_allocateheap.c
+@@ -41,7 +41,11 @@ extern void BSP_Board_PreInit(void);
+ 
+ #define SRAM_START  0x20000000
+ #define SRAM_SIZE   0x00080000    /* 512 KB */
+-#define SRAM_END    (SRAM_START + SRAM_SIZE)
++/* The final 1 KiB of HPSYS SRAM is reserved for the two HCPU-to-LCPU
++ * mailbox channels (0x2007fc00..0x2007ffff), so it must not be part of
++ * the NuttX heap.  Otherwise BLE traffic overwrites live heap objects. */
++
++#define SRAM_END    HCPU2LCPU_MB_CH2_BUF_START_ADDR
+ 
+ /* PSRAM memory configuration for SF32LB52 (MPI1 SBUS) */
+ 

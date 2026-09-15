@@ -54,6 +54,20 @@ extern int bt_start_advertising(uint8_t type,
                                 FAR const struct bt_eir_s *sd);
 extern int bt_stop_advertising(void);
 
+/* Connection-state callbacks are implemented by bt_hcicore.c but, like the
+ * advertising helpers above, are not exported by an installed header in
+ * this openvela revision. */
+
+struct bt_conn_cb_s
+{
+  FAR struct bt_conn_cb_s *flink;
+  FAR void *context;
+  CODE void (*connected)(FAR struct bt_conn_s *conn, FAR void *context);
+  CODE void (*disconnected)(FAR struct bt_conn_s *conn, FAR void *context);
+};
+
+extern void bt_conn_cb_register(FAR struct bt_conn_cb_s *cb);
+
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -169,15 +183,18 @@ static struct bt_uuid_s g_uuid_gatt_sc =
   .u.u16 = 0x2a05,                /* GATT Service Changed */
 };
 
-/* d38a0001-1234-5678-9abc-def012345678 (little endian on the air) */
+/* NuttX compares and serializes BT_UUID_128 as a little-endian 128-bit
+ * integer, so the canonical UUID text must be reversed byte-for-byte here.
+ * Keeping only each UUID field little-endian makes Android see the different
+ * UUID def01234-5678-9abc-5678-1234d38a0001. */
 
 static struct bt_uuid_s g_uuid_mood =
 {
   .type = BT_UUID_128,
   .u.u128 =
   {
-    0x01, 0x00, 0x8a, 0xd3, 0x34, 0x12, 0x78, 0x56,
-    0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0xf0, 0xde
+    0x78, 0x56, 0x34, 0x12, 0xf0, 0xde, 0xbc, 0x9a,
+    0x78, 0x56, 0x34, 0x12, 0x01, 0x00, 0x8a, 0xd3
   }
 };
 
@@ -188,8 +205,8 @@ static struct bt_uuid_s g_uuid_event =
   .type = BT_UUID_128,
   .u.u128 =
   {
-    0x02, 0x00, 0x8a, 0xd3, 0x34, 0x12, 0x78, 0x56,
-    0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0xf0, 0xde
+    0x78, 0x56, 0x34, 0x12, 0xf0, 0xde, 0xbc, 0x9a,
+    0x78, 0x56, 0x34, 0x12, 0x02, 0x00, 0x8a, 0xd3
   }
 };
 
@@ -200,8 +217,8 @@ static struct bt_uuid_s g_uuid_control =
   .type = BT_UUID_128,
   .u.u128 =
   {
-    0x03, 0x00, 0x8a, 0xd3, 0x34, 0x12, 0x78, 0x56,
-    0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0xf0, 0xde
+    0x78, 0x56, 0x34, 0x12, 0xf0, 0xde, 0xbc, 0x9a,
+    0x78, 0x56, 0x34, 0x12, 0x03, 0x00, 0x8a, 0xd3
   }
 };
 
@@ -212,8 +229,8 @@ static struct bt_uuid_s g_uuid_data =
   .type = BT_UUID_128,
   .u.u128 =
   {
-    0x04, 0x00, 0x8a, 0xd3, 0x34, 0x12, 0x78, 0x56,
-    0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0xf0, 0xde
+    0x78, 0x56, 0x34, 0x12, 0xf0, 0xde, 0xbc, 0x9a,
+    0x78, 0x56, 0x34, 0x12, 0x04, 0x00, 0x8a, 0xd3
   }
 };
 
@@ -224,8 +241,8 @@ static struct bt_uuid_s g_uuid_status =
   .type = BT_UUID_128,
   .u.u128 =
   {
-    0x05, 0x00, 0x8a, 0xd3, 0x34, 0x12, 0x78, 0x56,
-    0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0xf0, 0xde
+    0x78, 0x56, 0x34, 0x12, 0xf0, 0xde, 0xbc, 0x9a,
+    0x78, 0x56, 0x34, 0x12, 0x05, 0x00, 0x8a, 0xd3
   }
 };
 
@@ -419,6 +436,8 @@ static uint8_t  g_dis_pnp[7] =
 
 static bool     g_gatt_installed;
 static bool     g_adv_enabled;
+static volatile bool g_link_connected;
+static bool     g_conn_cb_registered;
 static pthread_mutex_t g_adv_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static uint16_t g_adv_int_min = HS_BLE_ADV_INT_IDLE * 8 / 5;
@@ -441,6 +460,33 @@ static volatile bool g_peer_connected;
  */
 
 static volatile bool g_adv_restart;
+
+static void hs_ble_link_connected(FAR struct bt_conn_s *conn,
+                                  FAR void *context)
+{
+  (void)conn;
+  (void)context;
+  g_link_connected = true;
+}
+
+static void hs_ble_link_disconnected(FAR struct bt_conn_s *conn,
+                                     FAR void *context)
+{
+  (void)conn;
+  (void)context;
+  g_link_connected = false;
+
+  if (g_adv_enabled)
+    {
+      g_adv_restart = true;
+    }
+}
+
+static struct bt_conn_cb_s g_conn_cb =
+{
+  .connected = hs_ble_link_connected,
+  .disconnected = hs_ble_link_disconnected,
+};
 
 /* TEMPORARY: see hs_ble_stage() in hs_ble.h. */
 
@@ -466,20 +512,6 @@ const char *hs_ble_stage_last(void)
   return g_ble_stage;
 }
 
-/* TEMPORARY: see hs_ble_trace() in hs_ble.h. */
-
-static volatile int g_ble_trace;
-
-void hs_ble_trace(int code)
-{
-  g_ble_trace = code;
-}
-
-int hs_ble_trace_last(void)
-{
-  return g_ble_trace;
-}
-
 bool hs_ble_gatt_peer_connected(void)
 {
   return g_peer_connected;
@@ -499,12 +531,8 @@ static void hs_ble_ccc_cfg_changed(uint16_t value)
 
   /* Do not log from here.  This callback runs in the receive path of the
    * Bluetooth thread, i.e. the thread that also has to deliver the HCI event
-   * completing a command.  A blocked console write at that point stalls the
-   * host stack, and the trace code below is enough to see the transition.
+   * completing a command.  A blocked console write here stalls the host.
    */
-
-  hs_ble_trace(g_peer_connected ? HS_BLE_TRACE_CCC_SUB
-                                : HS_BLE_TRACE_CCC_UNSUB);
 
   if (g_peer_connected)
     {
@@ -902,6 +930,26 @@ int hs_ble_gatt_start(const char *suffix)
       return -ENOTCONN;
     }
 
+  /* The NuttX GATT database is process-global and has no matching
+   * unregister operation.  Turning the UI switch off only stops
+   * advertising; a later turn-on must reuse the installed attributes and
+   * re-enable advertising, not append the same database a second time. */
+
+  if (g_gatt_installed)
+    {
+      /* Advertising cannot be enabled while the controller is already in a
+       * connection.  In that case ON simply resumes application data; the
+       * disconnect callback will re-arm advertising when the link drops. */
+
+      if (g_link_connected)
+        {
+          g_adv_enabled = true;
+          return OK;
+        }
+
+      return hs_ble_adv_apply();
+    }
+
   if (suffix != NULL && strlen(suffix) == 4)
     {
       snprintf(hex, sizeof(hex), "%s", suffix);
@@ -927,6 +975,12 @@ int hs_ble_gatt_start(const char *suffix)
 
   bt_gatt_register(g_attrs, sizeof(g_attrs) / sizeof(g_attrs[0]));
   g_gatt_installed = true;
+
+  if (!g_conn_cb_registered)
+    {
+      bt_conn_cb_register(&g_conn_cb);
+      g_conn_cb_registered = true;
+    }
 
   if (hs_ble_adv_apply() < 0)
     {

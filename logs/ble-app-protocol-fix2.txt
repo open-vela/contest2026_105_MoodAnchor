@@ -1,0 +1,267 @@
+
+=== [13:38:09] port opened ===
+[13:38:10] SFBL
+[13:38:12] AB[13:38:12] CD[0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc0 init done, ret=0
+[0m[13:38:12] [0m[33mADC calibration data missing, use defaults
+[0m[0mAD[13:38:12] C calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc1 init[13:38:13] [0mINFO: LSM6DS3 test device registered as /dev/lsm6dsl0, INT=31
+[0m[0m[33mWARN: skip HAL_FLASH_Init during XIP bringup, NOR write/erase disabled
+[0m[0mINFO: NOR MTD registered at /dev/config0 (offset=2464 blocks=1024)
+[0m[13:38:15] mood_anchor [8:100]
+
+NuttShell (NSH)
+nsh> [K[0m[31;1m[LVGL] [User]	(2.709, +2709)	 check_stack_size: tid: 8, Stack size : 40856 lv_nuttx_entry.c:283
+[0m[0m[31;1m[LVGL] [User]	(2.712, +3)	 lv_nuttx_lcd_create: lcd /dev/lcd0 opening lv_nuttx_lcd.c:77
+[0m[0m[31;1m[LVGL] [User]	(2.715, +3)	 lv_nuttx_lcd_create: lcd /dev/lcd0 open success lv_nuttx_lcd.c:84
+[0m[0m[31;1m[LVGL] [User]	(2.728, +13)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 opening lv_nuttx_touchscreen.c:79
+[0m[0m[31;1m[LVGL] [User]	(2.731, +3)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 open success, maxpoint 1 lv_nuttx_touchscreen.c:98
+[0m[13:38:15] [ui] 1
+MoodAnchor UI running (swipe for SYSTEM / MOOD / MOTION / SOUND / LINK / TUNE); KEY2 fakes an emotion change
+[sim] KEY2 ready: press it to fake an emotion change
+[13:38:16] mood: microphone started
+[13:38:17] [ui] 5
+[13:38:19] mood: agitation marked a false alarm (0/1)
+[13:38:19] [ui] 9
+[13:38:21] [ui] 13
+[13:38:24] sf32lb52 bt: LCPU up in 1520 ms
+[ui] 17
+[13:38:24] [BLE] NuttX host stack up, controller initialised
+[13:38:24] [BLE] advertising as "是非钟-0001", service d38a0001-1234-5678-9abc-def012345678
+[hb] sys=4 imu=32 gsr=14 ble=2 peer=0 mood=1/0
+[13:38:26] [ui] 21
+[13:38:27] [hb] sys=5 imu=40 gsr=18 ble=2 peer=0 mood=1/0
+[13:38:28] [ui] 25
+[13:38:29] [hb] sys=6 imu=48 gsr=22 ble=2 peer=0 mood=1/0
+[13:38:30] [ui] 29
+[13:38:31] [hb] sys=6 imu=57 gsr=27 ble=2 peer=0 mood=1/0
+[13:38:31] [0m[31m[BT] LE_CONN_COMPLETE: status=0x00 handle=1 role=1 peer=6A:F1:10:4B:0B:FF (random)
+[0m[13:38:31] bt_conn_send: conn handle 1 buf len 9
+[13:38:32] bt_conn_send: conn handle 1 buf len 18
+bt_conn_send: conn handle 1 buf len 26
+[13:38:32] bt_conn_send: conn handle 1 buf len 18
+bt_conn_send: conn handle 1 buf len 9
+[ui] 33
+[13:38:32] bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 20
+[13:38:32] bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 9
+[13:38:33] bt_conn_send: conn handle 1 buf len 13
+[hb] sys=7 imu=66 gsr=31 ble=2 peer=0 mood=1/0
+bt_conn_send: conn handle 1 buf len 9
+[13:38:33] bt_conn_send: conn handle 1 buf len 10
+bt_conn_send: conn handle 1 buf len 9
+[13:38:33] bt_conn_send: conn handle 1 buf len 27
+bt_conn_send: conn handle 1 buf len 27
+[13:38:33] bt_conn_send: conn handle 1 buf len 27
+bt_conn_send: conn handle 1 buf len 27
+[13:38:34] bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 10
+[13:38:34] bt_conn_send: conn handle 1 buf len 10
+bt_conn_send: conn handle 1 buf len 10
+[13:38:34] [ui] 37
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 20
+[13:38:34] bt_conn_send: conn handle 1 buf len 20
+bt_conn_send: conn handle 1 buf len 13
+[13:38:35] bt_conn_send: conn handle 1 buf len 9
+[hb] sys=8 imu=75 gsr=36 ble=2 peer=0 mood=1/0
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 13
+[13:38:35] bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 10
+[13:38:35] bt_conn_send: conn handle 1 buf len 5
+[13:38:35] bt_conn_send: conn handle 1 buf len 5
+bt_conn_send: conn handle 1 buf len 5
+[13:38:36] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:36] [ui] 41
+[13:38:37] [hb] sys=9 imu=84 gsr=40 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+[13:38:38] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:38] [ui] 45
+[13:38:39] [hb] sys=10 imu=91 gsr=43 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:40] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:40] [ui] 49
+[13:38:41] [hb] sys=11 imu=100 gsr=47 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+[13:38:42] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:42] [ui] 53
+[13:38:43] [hb] sys=12 imu=108 gsr=51 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:44] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:44] [ui] 57
+[13:38:45] [hb] sys=13 imu=117 gsr=56 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:46] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:46] [ui] 61
+[13:38:47] [hb] sys=13 imu=125 gsr=60 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+[13:38:48] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:48] [ui] 65
+[13:38:49] [hb] sys=14 imu=134 gsr=64 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+[13:38:50] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:51] [ui] 69
+[hb] sys=15 imu=142 gsr=68 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+[13:38:52] bt_conn_send: conn handle 1 buf len 23
+[13:38:53] [ui] 73
+[hb] sys=16 imu=151 gsr=73 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+[13:38:54] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:55] [ui] 77
+[hb] sys=17 imu=159 gsr=77 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:56] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:57] [ui] 81
+[hb] sys=18 imu=168 gsr=81 ble=2[13:38:57]  peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:58] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:38:59] [ui] 85
+[13:38:59] [hb] sys=19 imu=175 gsr=85 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+[13:39:00] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:01] [ui] 89
+[13:39:01] [hb] sys=19 imu=184 gsr=89 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:02] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:03] [ui] 93
+[hb] sys=20 imu=193 gsr=94 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:04] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:05] [ui] 97
+[hb] sys=21 imu=202 gsr=98 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:06] bt_conn_send: conn handle 1 buf len 23
+[13:39:07] [hb] sys=22 imu=210 gsr=102 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+[ui] 101
+[13:39:08] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:09] [hb] sys=23 imu=219 gsr=107 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[ui] 105
+[13:39:10] bt_conn_send: conn handle 1 buf len 23
+[13:39:11] [hb] sys=24 imu=228 gsr=111 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[ui] 109
+[13:39:12] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:13] [hb] sys=25 imu=235 gsr=115 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[ui] 113
+[13:39:14] bt_conn_send: conn handle 1 buf len 23
+[13:39:15] [hb] sys=25 imu=244 gsr=119 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:15] [ui] 117
+[13:39:16] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:17] [hb] sys=26 imu=253 gsr=124 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:17] [ui] 121
+[13:39:18] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:19] [hb] sys=27 imu=262 gsr=128 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:19] [ui] 125
+[13:39:20] bt_conn_send: conn handle 1 buf len 23
+[13:39:21] [hb] sys=28 imu=270 gsr=132 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:21] [ui] 129
+[13:39:22] bt_conn_send: conn handle 1 buf len 23
+[13:39:23] [hb] sys=29 imu=278 gsr=136 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:23] [ui] 133
+[13:39:24] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:25] [hb] sys=30 imu=286 gsr=140 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:25] [ui] 137
+[13:39:26] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:27] [hb] sys=30 imu=296 gsr=145 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:27] [ui] 141
+[13:39:28] bt_conn_send: conn handle 1 buf len 23
+[13:39:29] [hb] sys=31 imu=305 gsr=149 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+[13:39:29] [ui] 145
+[13:39:30] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:31] [hb] sys=32 imu=313 gsr=153 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:31] [ui] 149
+[13:39:32] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:33] [hb] sys=33 imu=321 gsr=157 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+[13:39:33] [ui] 153
+[13:39:34] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:35] [hb] sys=34 imu=329 gsr=161 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+[13:39:35] [ui] 157
+[13:39:36] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:37] [hb] sys=35 imu=338 gsr=166 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:38] [ui] 161
+[13:39:38] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:39] [hb] sys=36 imu=346 gsr=170 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+[13:39:40] [ui] 165
+[13:39:40] bt_conn_send: conn handle 1 buf len 23
+[13:39:41] [hb] sys=36 imu=356 gsr=175 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+[13:39:42] [ui] 169
+[13:39:42] bt_conn_send: conn handle 1 buf len 23
+[13:39:43] [hb] sys=37 imu=365 gsr=179 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+[13:39:44] [ui] 173
+[13:39:44] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:45] [hb] sys=38 imu=373 gsr=183 ble=2 peer=1 mood=1/0
+bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+[13:39:46] [ui] 177
+[13:39:46] bt_conn_send: conn handle 1 buf len 23
+bt_conn_send: conn handle 1 buf len 23
+
+=== [13:39:47] port lost: device reports readiness to read but returned no data (device disconnected or multiple access on port?) ===

@@ -22,7 +22,6 @@
 #include <nuttx/config.h>
 
 #include <errno.h>
-#include <unistd.h>
 #include <debug.h>
 
 #include <nuttx/mutex.h>
@@ -36,9 +35,6 @@
 /****************************************************************************
  * Private Data
  ****************************************************************************/
-
-/* Not yet exported from bt_driver.h: releases g_btdev.btdev. */
-void bt_driver_unset(FAR struct bt_driver_s *btdev);
 
 /* Vendor driver accessor added in vendor/sifli/chips/sf32lb52/sf32lb52_bth4.c */
 FAR struct bt_driver_s *sf32lb52_bt_get_driver(void);
@@ -59,7 +55,6 @@ int hs_ble_host_start(void)
 {
   FAR struct bt_driver_s *drv;
   int ret;
-  int attempt;
 
   nxmutex_lock(&g_host_lock);
 
@@ -86,27 +81,18 @@ int hs_ble_host_start(void)
       return -ENODEV;
     }
 
-  for (attempt = 0; attempt < 3; attempt++)
-    {
-      ret = bt_netdev_register(drv);
-      if (ret >= 0)
-        {
-          break;
-        }
+  /* The NuttX host is a process-wide singleton.  bt_netdev_register()
+   * installs connection callbacks before initialization and its failure
+   * path does not unregister them, so rerunning the whole registration on
+   * the same driver leaves callback links pointing into freed memory.  The
+   * controller is brought up in drv->open() before the HCI Reset timeout;
+   * report a remaining failure instead of corrupting the global host state. */
 
-      wlerr("ERROR: bt_netdev_register failed: %d (attempt %d)\n",
-            ret, attempt + 1);
-
-      bt_driver_unset(drv);
-
-      if (attempt < 2)
-        {
-          usleep(1000000);
-        }
-    }
+  ret = bt_netdev_register(drv);
 
   if (ret < 0)
     {
+      wlerr("ERROR: bt_netdev_register failed: %d\n", ret);
       g_host_started = false;
       nxmutex_unlock(&g_host_lock);
       return ret;

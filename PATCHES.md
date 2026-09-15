@@ -240,6 +240,41 @@ HCI 命令线程（`hci_tx_kthread`）和每条连接的 ACL 线程（`conn_tx_k
 
 已用 `mutex_t` 把「等空闲 + 写环 + 命令的尾部排空」整段串起来。
 
+另外，SiFli LCPU 把 H4 类型字节和后续 HCI 包体当成两次 IPC indication。
+发送函数虽然刻意将它们拆成两次写入，却曾在第一次触发邮箱中断后立刻写第二段；
+当 LCPU 尚未来得及消费第一段时，两段会在共享环中合并。例如本应发送的
+`01 08 20 ...`（H4 Command + LE Set Advertising Data）会被解析成错误 opcode
+`0x0801`，host 此时正在等待 `0x2008`，随后整个命令队列超时。现在每个非末尾
+分片发布后都等待 TX 环排空，明确保留 indication 边界。
+
+### 12. `vendor/sifli/chips/sf32lb52/sf32lb52_bt_adapter.c` — RX 共享环边界保护
+
+最新冷启动日志的 HardFault 实际栈为：
+
+```
+hpwork -> sf32lb52_bt_rx_worker -> sf32lb52_bt_ring_copy -> memcpy
+```
+
+旧代码只在控制器 enable 阶段等待一次 RX 环有效；邮箱中断后的 worker 直接
+使用 LCPU 共享的 `buffer_size`、read/write 下标计算拷贝地址。LCPU 上电重建环头
+期间一旦读到瞬态非法值，就会把越界地址传给 `memcpy()`，表现为打开蓝牙后整机
+卡死。现在 worker 每次 drain 前都会校验环大小和三个下标，非法状态有限重试后
+退出；`sf32lb52_bt_ring_copy()` 自身也有最后一道边界保护。
+
+可复现补丁：`patches/vendor-sifli-ble-host-stability.patch`。该补丁同时把 LCPU
+上电移到 HCI Reset 同步超时之前，避免冷启动先超时再重跑不可重入的 host 注册。
+
+应用侧 `hs_ble_host_start()` 也已删除 3 次完整 `bt_netdev_register()` 重试。
+原因是该函数在初始化前就把 netdev 内嵌的连接/L2CAP 回调挂进全局链表，失败时
+释放 netdev 却不注销回调；随后重试会留下悬空回调并污染全局 host 状态。实机上
+其表现是第二次显示 host/广播成功，但手机一连接就在
+`bt_conn_set_state -> bt_queue_open -> inode_find` 崩溃。
+
+同一补丁还将 `sifli_allocateheap.c` 的内部 SRAM heap 上界从 `0x20080000`
+缩到 `0x2007fc00`。芯片内存图明确把最后 1 KiB 保留给 HCPU→LCPU 的两个
+mailbox 环；旧 heap 与该区域重叠，LCPU 启动后会覆盖活跃 heap 对象，导致故障点
+随机出现在 ADC `ioctl`、蓝牙消息队列或 RX `memcpy`。
+
 ## 可选改动
 
 ### 2. `vendor/sifli/boards/sf32lb52/lckfb_huangshan_pi/configs/nsh/defconfig`
@@ -251,7 +286,14 @@ HCI 命令线程（`hci_tx_kthread`）和每条连接的 ACL 线程（`conn_tx_k
   `# CONFIG_LIB_FREETYPE is not set`（收益很小，可回退）
 - `CONFIG_DEBUG_WIRELESS=y` / `_ERROR` / `_WARN` 保持开启（错误可见）
 
-### 3. `vendor/sifli/boards/sf32lb52/lckfb_huangshan_pi/src/etc/init.d/rcS`
+### 3. `nuttx/wireless/bluetooth/bt_conn.c` — 关闭误标为警告的逐包日志
+
+`bt_conn_send()` 原本用 `wlwarn()` 打印每一个发送包的 handle 和长度。连接 App
+并订阅通知后，这会持续同步写串口，挤占 BLE 与界面线程。该消息只是普通追踪信息，
+已降为 `wlinfo()`；由于 `CONFIG_DEBUG_WIRELESS_INFO` 关闭，它不会进入正式固件，
+而真正的 `wlwarn()` / `wlerr()` 仍然保留。
+
+### 4. `vendor/sifli/boards/sf32lb52/lckfb_huangshan_pi/src/etc/init.d/rcS`
 
 ```
 sleep 2
@@ -259,7 +301,7 @@ mood_anchor &
 ```
 注意 rcS 经 C 预处理器，**不能有 `#` 注释**。
 
-### 4. vendor TRACE 宏（已还原，勿改）
+### 5. vendor TRACE 宏（已还原，勿改）
 
 `sf32lb52_bth4.c` / `sf32lb52_bt_adapter.c` 的 `SF32LB52_BT_TRACE` 必须为 0。
 诊断期间曾改为 1，会打印每个 HCI 包的日志（中断上下文里还踩过

@@ -1,0 +1,395 @@
+
+=== [12:37:44] port opened ===
+[12:37:44] SFBL
+[12:37:46] AB[12:37:46] CD[0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc0 init done, ret=0
+[0m[12:37:46] [0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc1 init done, ret=0
+[0m[12:37:47] [0mINFO: LSM6DS3 test device registered as /dev/lsm6dsl0, INT=31
+[0m[0m[33mWARN: skip HAL_FLASH_Init during XIP bringup, NOR write/erase disabled
+[0m[0mINFO: NOR MTD registered at /dev/config0 (offset=2464 blocks=1024)
+[0m[12:37:49] mood_anchor [8:100]
+
+NuttShell (NSH)
+nsh> [K[0m[31;1m[LVGL] [User]	(2.700, +2700)	 check_stack_size: tid: 8, Stack size : 40856 lv_nuttx_entry.c:283
+[0m[0m[31;1m[LVG)	 lv_nuttx_lcd_create: lcd /dev/lcd0 opening lv_nuttx_lcd.c:77[0m[31;1m[LVGL] [User]	(2.705, +2)	 lv_nuttx_lcd_create: lcd /4
+[0m[0m[31;1m[LVGL] [User]	(2.719, +14)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 opening lv_nuttx_touchscreen.c:79
+[0m[0m[31;1m[LVGL] [User]	(2.722, +3)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 open success, maxpoint 1 lv_nuttx_touchscreen.c:98
+[0m[12:37:49] [ui] 1
+MoodAnchor UI running (swipe for SYSTEM / MOOD / MOTION / SOUND / LINK / TUNE); KEY2 fakes an emotion change
+[sim] KEY2 ready: press it to fake an emotion change
+[12:37:50] mood: microphone started
+[12:37:51] [ui] 5
+[12:37:53] [ui] 9
+[12:37:55] [ui] 13
+[12:37:56] mood: agitation marked a false alarm (0/1)
+[12:37:58] [ui] 17
+[12:38:00] [ui] 21
+[12:38:02] [ui] 25
+[12:38:04] [ui] 29
+[12:38:06] [ui] 33
+[12:38:08] sf32lb52 bt: LCPU up in 1400 ms
+[12:38:08] [BLE] NuttX host stack up, controller initialised
+[BLE] advertising as "是非钟-0001", service d38a0001-1234-5678-9abc-def012345678
+[hb] sys=9 imu=75 gsr=36 ble=2 peer=0 mood=1/0
+[12:38:09] [ui] 37
+[12:38:10] [hb] sys=9 imu=84 gsr=40 ble=2 peer=0 mood=1/0
+[12:38:11] [ui] 41
+[12:38:12] [hb] sys=10 imu=93 gsr=44 ble=2 [12:38:13] peer=0 mood=1/0
+[12:38:13] [ui] 45
+[12:38:15] [hb] sys=11 imu=100 gsr=48 ble=2 peer=0 mood=1/0
+[12:38:15] [ui] 49
+[12:38:17] [hb] sys=12 imu=107 gsr=51 ble=2 peer=0 mood=1/0
+[12:38:17] [ui] 53
+[12:38:19] [hb] sys=13 imu=116 gsr=55 ble=2 peer=0 mood=1/0
+[12:38:19] [ui] 57
+[12:38:21] [hb] sys=14 imu=125 gsr=60 ble=2 peer=0 mood=1/0
+[12:38:21] [ui] 61
+[12:38:23] [hb] sys=15 imu=134 gsr=64 ble=2 peer=0 mood=1/0
+[12:38:23] [ui] 65
+[12:38:24] [0m[31m[BT] LE_CONN_COMPLETE: status=0x00 handle=1 role=1 peer=78:4D:91:2B:02:39 (random)
+[0mbt_conn_send: conn handle 1 buf len 9
+[12:38:24] bt_conn_send: conn handle 1 buf len 18
+bt_conn_send: conn handle 1 buf len 26
+[12:38:25] bt_conn_send: conn handle 1 buf len 18
+bt_conn_send: conn handle 1 buf len 9
+[hb] sys=16 imu=142 gsr=68 ble=2 peer=0 mood=1/0
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 20
+[12:38:25] bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 13
+bt_conn_send: conn handle 1 buf len 9
+[12:38:25] bt_conn_send: conn handle 1 buf len 10
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 27
+[12:38:25] bt_conn_send: conn handle 1 buf len 27
+[ui] 69
+bt_conn_send: conn handle 1 buf len 27
+bt_conn_send: conn handle 1 buf len 27
+bt_conn_send: conn handle 1 buf len 9
+[12:38:26] bt_conn_send: conn handle 1 buf len 10
+bt_conn_send: conn handle 1 buf len 10
+bt_conn_send: conn handle 1 buf len 10
+bt_conn_send: conn handle 1 buf len 9
+[12:38:26] bt_conn_send: conn handle 1 buf len 20
+bt_conn_send: conn handle 1 buf len 20
+bt_conn_send: conn handle 1 buf len 13
+[12:38:26] bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 13
+bt_conn_send: conn handle 1 buf len 9
+[12:38:26] bt_conn_send: conn handle 1 buf len 10
+[12:38:27] [hb] sys=16 imu=151 gsr=73 ble=2 peer=0 mood=1/0
+[12:38:27] [ui] 73
+[12:38:29] [hb] sys=17 imu=160 gsr=77 ble=2 peer=0 mood=1/0
+[12:38:29] [ui] 77
+[12:38:31] [hb] sys=18 imu=169 gsr=82 ble=2 peer=0 mood=1/0
+[0m[31m[BT] LE_CONN_COMPLETE: status=0x00 handle=1 role=1 peer=78:4D:91:2B:02:39 (random)
+[0m[12:38:31] bt_conn_send: conn handle 1 buf len 9
+[12:38:31] bt_conn_send: conn handle 1 buf len 18
+bt_conn_send: conn handle 1 buf len 26
+[12:38:31] bt_conn_send: conn handle 1 buf len 18
+bt_conn_send: conn handle 1 buf len 9
+[ui] 81
+[12:38:32] bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 20
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 9
+[12:38:32] bt_conn_send: conn handle 1 buf len 13
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 10
+[12:38:32] bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 27
+bt_conn_send: conn handle 1 buf len 27
+bt_conn_send: conn handle 1 buf len 27
+[12:38:32] bt_conn_send: conn handle 1 buf len 27
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 10
+[12:38:33] bt_conn_send: conn handle 1 buf len 10
+bt_conn_send: conn handle 1 buf len 10
+bt_conn_send: conn handle 1 buf len 9
+[hb] sys=19 imu=178 gsr=86 ble=2 peer=0 mood=1/0
+bt_conn_send: conn handle 1 buf len 20
+[12:38:33] bt_conn_send: conn handle 1 buf len 20
+bt_conn_send: conn handle 1 buf len 13
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 9
+[12:38:33] bt_conn_send: conn handle 1 buf len 13
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 10
+[12:38:34] [ui] 85
+[12:38:35] [hb] sys=20 imu=186 gsr=90 ble=2 peer=0 mood=1/0
+[12:38:35] [0m[31m[BT] LE_CONN_COMPLETE: status=0x00 handle=1 role=1 peer=78:4D:91:2B:02:39 (random)
+[0mbt_conn_send: conn handle 1 buf len 9
+[12:38:36] bt_conn_send: conn handle 1 buf len 18
+[ui] 89
+bt_conn_send: conn handle 1 buf len 26
+[12:38:36] bt_conn_send: conn handle 1 buf len 18
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 9
+[12:38:36] bt_conn_send: conn handle 1 buf len 20
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 13
+[12:38:36] bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 10
+bt_conn_send: conn handle 1 buf len 9
+[12:38:37] bt_conn_send: conn handle 1 buf len 27
+bt_conn_send: conn handle 1 buf len 27
+bt_conn_send: conn handle 1 buf len 27
+[hb] sys=21 imu=195 gsr=95 ble=2 peer=0 mood=1/0
+bt_conn_send: conn handle 1 buf len 27
+[12:38:37] bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 10
+bt_conn_send: conn handle 1 buf len 10
+[12:38:37] bt_conn_send: conn handle 1 buf len 10
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 20
+bt_conn_send: conn handle 1 buf len 20
+[12:38:37] bt_conn_send: conn handle 1 buf len 13
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 13
+[12:38:38] bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 10
+[ui] 93
+[12:38:39] [hb] sys=22 imu=204 gsr=99 ble=2 peer=0 mood=1/0
+[12:38:40] [ui] 97
+[12:38:41] [hb] sys=23 imu=211 gsr=103 ble=2 peer=0 mood=1/0
+[12:38:42] [ui] 101
+[12:38:43] [hb] sys=23 imu=220 gsr=108 ble=2 peer=0 mood=1/0
+[12:38:44] [ui] 105
+[12:38:45] [hb] sys=24 imu=228 gsr=112 ble=2 peer=0 mood=1/0
+[12:38:46] [ui] 109
+[12:38:47] [hb] sys=25 imu=237 gsr=117 ble=2 peer=0 mood=1/0
+[12:38:48] [ui] 113
+[12:38:49] [hb] sys=26 imu=245 gsr=121 ble=2 peer=0 mood=1/0
+[12:38:50] [ui] 117
+[12:38:51] [hb] sys=27 imu=254 gsr=126 ble=2 peer=0 mood=1/0
+[12:38:52] [0m[31m[BT] LE_CONN_COMPLETE: status=0x00 handle=1 role=1 peer=78:4D:91:2B:02:39 (random)
+[0m[12:38:52] bt_conn_send: conn handle 1 buf len 9
+[12:38:52] bt_conn_send: conn handle 1 buf len 18
+[ui] 121
+bt_conn_send: conn handle 1 buf len 26
+bt_conn_send: conn handle 1 buf len 18
+[12:38:52] bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 20
+bt_conn_send: conn handle 1 buf len 9
+[12:38:53] bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 13
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 10
+[12:38:53] bt_conn_send: conn handle 1 buf len 9
+[hb] sys=28 imu=263 gsr=130 ble=2 peer=0 mood=1/0
+bt_conn_send: conn handle 1 buf len 27
+bt_conn_send: conn handle 1 buf len 27
+[12:38:53] bt_conn_send: conn handle 1 buf len 27
+bt_conn_send: conn handle 1 buf len 27
+bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 10
+[12:38:53] bt_conn_send: conn handle 1 buf len 10
+bt_conn_send: conn handle 1 buf len 10
+bt_conn_send: conn handle 1 buf len 9
+[12:38:54] bt_conn_send: conn handle 1 buf len 20
+bt_conn_send: conn handle 1 buf len 20
+bt_conn_send: conn handle 1 buf len 13
+bt_conn_send: conn handle 1 buf len 9
+[12:38:54] bt_conn_send: conn handle 1 buf len 9
+bt_conn_send: conn handle 1 buf len 13
+bt_conn_send: conn handle 1 buf len 9
+[12:38:54] bt_conn_send: conn handle 1 buf len 10
+[ui] 125
+[12:38:55] [hb] sys=29 imu=272 gsr=134 ble=2 peer=0 mood=1/0
+[12:38:56] [ui] 129
+[12:38:57] [hb] sys=30 imu=280 gsr=139 ble=2 peer=0 mood=1/0
+[12:38:58] [ui] 133
+[12:38:59] [hb] sys=31 imu=289 gsr=143 ble=2 peer=0 mood=1/0
+[12:39:00] [ui] 137
+[12:39:01] [hb] sys=31 imu=297 gsr=148 ble=2 peer=0 mood=1/0
+[12:39:02] [ui] 141
+[12:39:03] [hb] sys=32 imu=307 gsr=152 ble=2 peer=0 mood=1/0
+[12:39:05] [ui] 145
+[12:39:05] [hb] sys=33 imu=315 gsr=156 ble=2 peer=0 mood=1/0
+[12:39:07] [ui] 149
+[12:39:07] [hb] sys=34 imu=323 gsr=161 ble=2 peer=0 mood=1/0
+[12:39:09] [ui] 153
+[12:39:09] [hb] sys=35 imu=332 gsr=165 ble=2 peer=0 mood=1/0
+[12:39:10] bt_conn_send: conn handle 1 buf len 5
+[12:39:11] bt_conn_send: conn handle 1 buf len 5
+[ui] 157
+[12:39:11] [hb] sys=36 imu=340 gsr=169 ble=2 peer=0 mood=1/0
+[12:39:11] [BLE] link dropped, advertising restarted
+[12:39:13] [ui] 161
+bt_conn_send: conn handle 1 buf len 16
+[12:39:13] [hb] sys=37 imu=349 gsr=174 ble=2 peer=0 mood=1/0
+[12:39:14] bt_conn_send: conn handle 1 buf len 16
+[12:39:15] [ui] 165
+[12:39:15] [hb] sys=38 imu=356 gsr=178 ble=2 peer=0 mood=1/0
+[12:39:16] bt_conn_send: conn handle 1 buf len 5
+[12:39:17] [ui] 169
+[12:39:17] [hb] sys=38 imu=366 gsr=183 ble=2 peer=0 mood=1/0
+[12:39:19] [ui] 173
+[12:39:19] bt_conn_send: conn handle 1 buf len 21
+[hb] sys=39 imu=374 gsr=187 ble=2 peer=0 mood=1/0
+[12:39:21] [ui] 177
+[12:39:21] [hb] sys=40 imu=383 gsr=192 ble=2 peer=0 mood=1/0
+[12:39:21] bt_conn_send: conn handle 1 buf len 21
+[12:39:23] [ui] 181
+[hb] sys=41 imu=392 gsr=196 ble=2 peer=0 mood=1/0
+[12:39:24] bt_conn_send: conn handle 1 buf len 7
+[12:39:25] [ui] 185
+[hb] sys=42 imu=400 gsr=200 ble=2 peer=0 mood=1/0
+[12:39:25] bt_conn_send: conn handle 1 buf len 7
+[12:39:27] bt_conn_send: conn handle 1 buf len 5
+[ui] 189
+[hb] sys=43 imu=409 gsr=205 ble=2 peer=0 mood=1/0
+[12:39:29] bt_conn_send: conn handle 1 buf len 7
+[12:39:29] bt_conn_send: conn handle 1 buf len 7
+[hb] sys=44 imu=417 gsr=209 ble=2 peer=0 mood=1/0
+[ui] 193
+[12:39:30] bt_conn_send: conn handle 1 buf len 16
+[12:39:31] bt_conn_send: conn handle 1 buf len 16
+[12:39:32] [hb] sys=45 imu=425 gsr=214 ble=2 peer=0 mood=1/0
+[ui] 197
+[12:39:34] [hb] sys=46 imu=434 gsr=218 ble=2 peer=0 mood=1/0
+[ui] 201
+[12:39:36] [hb] sys=46 imu=443 gsr=222 ble=2 peer=0 mood=1/0
+[ui] 205
+[12:39:38] [hb] sys=47 imu=452 gsr=227 ble=2 peer=0 mood=1/0
+[ui] 209
+[12:39:38] bt_conn_send: conn handle 1 buf len 21
+[12:39:39] bt_conn_send: conn handle 1 buf len 5
+[12:39:40] [hb] sys=48 imu=460 gsr=231 ble=2 peer=0 mood=1/0
+[12:39:40] [ui] 213
+[12:39:42] [hb] sys=49 imu=469 gsr=236 ble=2 peer=0 mood=1/0
+[12:39:42] [ui] 217
+[12:39:44] [hb] sys=50 imu=478 gsr=240 ble=2 peer=0 mood=1/0
+[12:39:44] [ui] 221
+[12:39:46] [hb] sys=51 imu=486 gsr=244 ble=2 peer=0 mood=1/0
+[12:39:46] [ui] 225
+[12:39:48] [hb] sys=52 imu=495 gsr=249 ble=2 peer=0 mood=1/0
+[12:39:48] [ui] 229
+[12:39:50] [hb] sys=53 imu=502 gsr=253 ble=2 peer=0 mood=1/0
+[12:39:50] [ui] 233
+[12:39:52] [hb] sys=53 imu=512 gsr=258 ble=2 peer=0 mood=1/0
+[12:39:52] [ui] 237
+[12:39:54] [hb] sys=54 imu=520 gsr=262 ble=2 peer=0 mood=1/0
+[12:39:54] [ui] 241
+[12:39:56] [hb] sys=55 imu=529 gsr=267 ble=2 peer=0 mood=1/0
+[12:39:56] [0m[31m[BT] HCI cmd opcode 0x200a rejected, status 0x0c (async)
+[0m[12:39:56] [ui] 245
+[12:39:58] [hb] sys=56 imu=538 gsr=271 ble=2 peer=0 mood=1/0
+[12:39:58] [ui] 249
+[12:40:00] [hb] sys=57 imu=546 gsr=275 ble=2 peer=0 mood=1/0
+[12:40:00] [ui] 253
+[12:40:02] [hb] sys=58 imu=555 gsr=280 ble=2 peer=0 mood=1/0
+[12:40:02] [ui] 257
+[12:40:04] [hb] sys=59 imu=562 gsr=284 ble=[12:40:04] 2 peer=0 mood=1/0
+[12:40:04] [0m[31m[BT] LE_CONN_COMPLETE: status=0x00 handle=2 role=1 peer=78:4D:91:2B:02:39 (random)
+[0m[12:40:04] bt_conn_send: conn handle 2 buf len 9
+bt_conn_send: conn handle 2 buf len 18
+[ui] 261
+bt_conn_send: conn handle 2 buf len 26
+[12:40:05] bt_conn_send: conn handle 2 buf len 18
+bt_conn_send: conn handle 2 buf len 9
+bt_conn_send: conn handle 2 buf len 9
+[12:40:05] bt_conn_send: conn handle 2 buf len 20
+bt_conn_send: conn handle 2 buf len 9
+bt_conn_send: conn handle 2 buf len 9
+bt_conn_send: conn handle 2 buf len 13
+[12:40:05] bt_conn_send: conn handle 2 buf len 9
+bt_conn_send: conn handle 2 buf len 10
+bt_conn_send: conn handle 2 buf len 9
+[12:40:05] bt_conn_send: conn handle 2 buf len 27
+bt_conn_send: conn handle 2 buf len 27
+bt_conn_send: conn handle 2 buf len 27
+[12:40:06] bt_conn_send: conn handle 2 buf len 27
+bt_conn_send: conn handle 2 buf len 9
+bt_conn_send: conn handle 2 buf len 10
+[12:40:06] [hb] sys=60 imu=571 gsr=289 ble=2 peer=0 mood=1/0
+bt_conn_send: conn handle 2 buf len 10
+bt_conn_send: conn handle 2 buf len 10
+bt_conn_send: conn handle 2 buf len 9
+bt_conn_send: conn handle 2 buf len 20
+[12:40:06] bt_conn_send: conn handle 2 buf len 20
+bt_conn_send: conn handle 2 buf len 13
+bt_conn_send: conn handle 2 buf len 9
+[12:40:06] bt_conn_send: conn handle 2 buf len 9
+bt_conn_send: conn handle 2 buf len 13
+bt_conn_send: conn handle 2 buf len 9
+bt_conn_send: conn handle 2 buf len 10
+[12:40:07] [ui] 265
+[12:40:08] [hb] sys=60 imu=579 gsr=293 ble=2 peer=0 mood=1/0
+[12:40:09] [ui] 269
+[12:40:10] [hb] sys=61 imu=588 gsr=297 ble=2 peer=0 mood=1/0
+[12:40:11] [ui] 273
+[12:40:12] [hb] sys=62 imu=598 gsr=302 ble=2 peer=0 mood=1/0
+[12:40:13] [ui] 277
+[12:40:14] [hb] sys=63 imu=605 gsr=306 ble=2 peer=0 mood=1/0
+[12:40:15] [ui] 281
+[12:40:16] [hb] sys=64 imu=614 gsr=311 ble=2 peer=0 mood=1/0
+[12:40:17] [ui] 285
+[12:40:18] [hb] sys=65 imu=623 gsr=315 ble=2 peer=0 mood=1/0
+[12:40:19] [ui] 289
+[12:40:19] [BLE] advertising disabled
+[12:40:21] [ui] 293
+[12:40:23] bt_stop_advertising: WARNING:  Already advertising
+hci_cmd_done: ERROR:  Unexpected completion of opcode 0x0801 expected 0x2008
+hci_event: WARNING:  Unhandled event 0x10
+[12:40:23] [ui] 297
+[12:40:25] [ui] 301
+[12:40:25] MoodAnchor: BLE start failed (-5)
+[12:40:27] [ui] 305
+[12:40:29] [ui] 309
+[12:40:31] [ui] 313
+[12:40:33] [ui] 317
+[12:40:35] [ui] 321
+[12:40:36] MoodAnchor: BLE start failed (-5)
+[12:40:38] [ui] 325
+[12:40:40] [ui] 329
+[12:40:42] [ui] 333
+[12:40:44] [ui] 337
+[12:40:46] [ui] 341
+[12:40:48] [ui] 345
+[12:40:50] [ui] 349
+[12:40:52] [ui] 353
+[12:40:54] [ui] 357
+[12:40:56] [ui] 361
+[12:40:58] [ui] 365
+[12:41:00] [ui] 369
+[12:41:02] [ui] 373
+[12:41:04] [ui] 377
+[12:41:06] [ui] 381
+[12:41:08] [ui] 385
+[12:41:10] [ui] 389
+[12:41:13] [ui] 393
+[12:41:15] [ui] 397
+[12:41:17] [ui] 401
+[12:41:19] [ui] 405
+[12:41:21] [ui] 409
+[12:41:23] [ui] 413
+[12:41:25] [ui] 417
+[12:41:27] [ui] 421
+[12:41:29] [ui] 425
+[12:41:31] [ui] 429
+[12:41:33] [ui] 433
+[12:41:35] [ui] 437
+[12:41:37] [ui] 441
+[12:41:39] [ui] 445
+[12:41:41] [ui] 449
+[12:41:44] [ui] 453
+[12:41:46] [ui] 457
+[12:41:48] [ui] 461
+[12:41:50] [ui] 465
+[12:41:52] [ui] 469
+[12:41:54] [ui] 473
+[12:41:56] [ui] 477
+[12:41:58] [ui] 481
+[12:42:00] [ui] 485
+[12:42:02] [ui] 489
+[12:42:04] [ui] 493
+[12:42:06] [ui] 497

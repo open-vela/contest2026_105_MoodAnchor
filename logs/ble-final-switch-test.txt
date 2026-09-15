@@ -1,0 +1,157 @@
+
+=== [12:49:16] port opened ===
+[12:49:17] SFBL
+[12:49:19] AB[12:49:19] CD[0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc0 init done, ret=0
+[0m[12:49:19] [0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc1 init done, ret=0
+[0m[12:49:20] [0mINFO: LSM6DS3 test device registered as /dev/lsm6dsl0, INT=31
+[0m[0m[33mWARN: skip HAL_FLASH_Init during XIP bringup, NOR write/erase disabled
+[0m[0mINFO: NOR MTD registered at /dev/config0 (offset=2464 blocks=1024)
+[0m[12:49:22] mood_anchor [8:100]
+
+NuttShell (NSH)
+nsh> [K[0m[31;1m[LVGL] [User]	(2.700, +2700)	 check_stack_size: tid: 8, Stack size : 40856 lv_nuttx_entry.c:283
+[0m[0m[31;1m[LVGL] [User]	(2.703, +3)	 lv_nuttx_lcd_create: lcd /dev/lcd0 opening lv_nuttx_lcd.c:77
+[0m[0m[31;1m[LVGL] [User]	(2.705, +2)	 lv_nuttx_lcd_create: lcd /dev/lcd0 open success lv_nuttx_lcd.c:84
+[0m[0m[31;1m[LVGL] [User]	(2.717, +12)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 opening lv_nuttx_touchscreen.c:79
+[0m[0m[31;1m[LVGL] [User]	(2.720, +3)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 open success, maxpoint 1 lv_nuttx[12:49:22] [ui] 1
+MoodAnchor UI running (swipe for SYSTEM / MOOD / MOTION / SOUND / LINK / TUNE); KEY2 fakes an emotion change
+[sim] KEY2 ready: press it to fake an emotion change
+[12:49:23] mood: microphone started
+[12:49:24] [ui] 5
+[12:49:26] [ui] 9
+[12:49:28] [ui] 13
+[12:49:30] [ui] 17
+[12:49:32] [ui] 21
+[12:49:34] [ui] 25
+[12:49:36] [ui] 29
+[12:49:38] [ui] 33
+[12:49:40] [ui] 37
+[12:49:42] [ui] 41
+[12:49:45] [ui] 45
+[12:49:47] [ui] 49
+[12:49:49] [ui] 53
+[12:49:51] [ui] 57
+[12:49:53] [ui] 61
+[12:49:55] [ui] 65
+[12:49:57] [ui] 69
+[12:49:59] [ui] 73
+[12:50:01] [ui] 77
+[12:50:03] [ui] 81
+[12:50:05] [ui] 85
+[12:50:07] [ui] 89
+[12:50:09] [ui] 93
+[12:50:11] [ui] 97
+[12:50:13] [ui] 101
+[12:50:15] [ui] 105
+[12:50:17] [ui] 109
+[12:50:20] [ui] 113
+[12:50:22] [ui] 117
+[12:50:24] [ui] 121
+[12:50:26] [ui] 125
+[12:50:28] [ui] 129
+[12:50:30] [ui] 133
+[12:50:32] [ui] 137
+[12:50:34] [ui] 141
+[12:50:36] [ui] 145
+[12:50:38] [ui] 149
+[12:50:40] [ui] 153
+[12:50:42] [ui] 157
+[12:50:44] [ui] 161
+[12:50:47] [ui] 165
+[12:50:49] [ui] 169
+[12:50:51] [ui] 173
+[12:50:53] [ui] 177
+[12:50:55] [ui] 181
+[12:50:57] [ui] 185
+[12:50:59] [ui] 189
+[12:51:01] [ui] 193
+[12:51:03] [ui] 197
+[12:51:05] [ui] 201
+[12:51:07] [ui] 205
+[12:51:09] [ui] 209
+[12:51:11] [ui] 213
+[12:51:13] [ui] 217
+[12:51:15] [ui] 221
+[12:51:17] [ui] 225
+[12:51:19] [ui] 229
+[12:51:21] [ui] 233
+[12:51:23] [ui] 237
+[12:51:26] [ui] 241
+[12:51:28] [ui] 245
+[12:51:30] [ui] 249
+[12:51:32] [ui] 253
+[12:51:34] [ui] 257
+[12:51:36] [ui] 261
+[12:51:38] [ui] 265
+[12:51:40] [ui] 269
+[12:51:42] [ui] 273
+[12:51:44] [ui] 277
+[12:51:46] [ui] 281
+[12:51:48] [ui] 285
+[12:51:50] [ui] 289
+[12:51:52] [ui] 293
+[12:51:54] [ui] 297
+[12:51:56] [ui] 301
+[12:51:58] [ui] 305
+[12:52:00] mood: agitation marked a false alarm (0/1)
+[12:52:01] [ui] 309
+[12:52:03] [ui] 313
+[12:52:05] [ui] 317
+[12:52:07] [ui] 321
+[12:52:09] [ui] 325
+[12:52:11] [ui] 329
+[12:52:13] [ui] 333
+[12:52:15] [ui] 337
+[12:52:17] [ui] 341
+[12:52:19] [ui] 345
+[12:52:21] [ui] 349
+[12:52:23] [ui] 353
+[12:52:25] [ui] 357
+[12:52:27] [ui] 361
+[12:52:29] [ui] 365
+[12:52:32] [ui] 369
+[12:52:34] [ui] 373
+[12:52:36] [ui] 377
+[12:52:38] [ui] 381
+[12:52:40] [ui] 385
+[12:52:42] [ui] 389
+[12:52:44] [ui] 393
+[12:52:46] [ui] 397
+[12:52:48] [ui] 401
+[12:52:50] [ui] 405
+[12:52:52] [ui] 409
+[12:52:54] [ui] 413
+[12:52:56] [ui] 417
+[12:52:59] [ui] 421
+[12:53:01] [ui] 425
+[12:53:03] [ui] 429
+[12:53:05] [ui] 433
+[12:53:07] [ui] 437
+[12:53:09] [ui] 441
+[12:53:11] [ui] 445
+[12:53:13] [ui] 449
+[12:53:15] [ui] 453
+[12:53:17] [ui] 457
+[12:53:19] [ui] 461
+[12:53:21] [ui] 465
+[12:53:23] [ui] 469
+[12:53:25] [ui] 473
+[12:53:27] [ui] 477
+[12:53:29] [ui] 481
+[12:53:31] [ui] 485
+[12:53:33] [ui] 489
+[12:53:36] [ui] 493
+[12:53:38] [ui] 497
+[12:53:40] [ui] 501
+[12:53:42] [ui] 505
+[12:53:44] [ui] 509
+[12:53:46] [ui] 513
+[12:53:48] [ui] 517
+[12:53:50] [ui] 521
+[12:53:52] [ui] 525
+[12:53:54] [ui] 529
+[12:53:56] [ui] 533
