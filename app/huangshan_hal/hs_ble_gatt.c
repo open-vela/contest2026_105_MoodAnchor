@@ -459,17 +459,6 @@ void hs_ble_stage(const char *fmt, ...)
   vsnprintf(g_ble_stage, sizeof(g_ble_stage), fmt, ap);
   va_end(ap);
 
-  /* TEMPORARY: give the LVGL thread time to put this on the panel.
-   *
-   * The bring-up worker runs at SCHED_FIFO priority 120, above the UI, so
-   * without this pause it can reach the fault before the label is ever
-   * drawn - and then the frozen picture still shows the previous stage,
-   * which is worse than useless.  Every stage therefore waits for one UI
-   * refresh before moving on.  Remove together with the trace and stage
-   * instrumentation.
-   */
-
-  usleep(700000);
 }
 
 const char *hs_ble_stage_last(void)
