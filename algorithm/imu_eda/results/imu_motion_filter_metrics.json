@@ -1,0 +1,152 @@
+{
+  "purpose": "Personalized vigorous-motion filter before physiological emotion detection; not an emotion classifier.",
+  "dataset": "PAMAP2 Protocol, wrist/hand IMU, 9 subjects, 100 Hz",
+  "feature_window": "2.0 seconds, 1.0 second step",
+  "block_activities": [
+    "running",
+    "cycling",
+    "nordic_walking",
+    "playing_soccer",
+    "rope_jumping"
+  ],
+  "allow_activities": [
+    "lying",
+    "sitting",
+    "standing",
+    "watching_tv",
+    "computer_work",
+    "car_driving",
+    "vacuum_cleaning",
+    "ironing",
+    "folding_laundry",
+    "house_cleaning"
+  ],
+  "global_train_subjects": [
+    101,
+    102,
+    103,
+    104,
+    105,
+    106
+  ],
+  "personalization_protocol": "Each unseen wearer: 120 s quiet baseline -> 50% labelled feedback threshold tuning -> 50% blind test. Global logistic-regression weights remain frozen.",
+  "unseen_personalization_subjects": [
+    107,
+    108
+  ],
+  "aggregate_blind_global_frozen_metrics": {
+    "accuracy": 0.919,
+    "motion_precision": 0.8552,
+    "motion_recall": 0.8998,
+    "motion_f1": 0.8769,
+    "tn_allow_correct": 941,
+    "fp_over_filter": 73,
+    "fn_motion_missed": 48,
+    "tp_motion_blocked": 431
+  },
+  "aggregate_blind_personalized_metrics": {
+    "accuracy": 0.9056,
+    "motion_precision": 0.8051,
+    "motion_recall": 0.9311,
+    "motion_f1": 0.8635,
+    "tn_allow_correct": 906,
+    "fp_over_filter": 108,
+    "fn_motion_missed": 33,
+    "tp_motion_blocked": 446
+  },
+  "per_unseen_subject": {
+    "107": {
+      "baseline_windows": 120,
+      "baseline_seconds": 120,
+      "feedback_windows": 724,
+      "blind_windows": 726,
+      "personal_calibration_strength": 0.0,
+      "personal_threshold": 0.44,
+      "feedback_metrics_used_for_threshold_only": {
+        "accuracy": 0.9144,
+        "motion_precision": 0.8516,
+        "motion_recall": 0.9008,
+        "motion_f1": 0.8755,
+        "tn_allow_correct": 444,
+        "fp_over_filter": 38,
+        "fn_motion_missed": 24,
+        "tp_motion_blocked": 218
+      },
+      "blind_global_frozen_metrics": {
+        "accuracy": 0.9298,
+        "motion_precision": 0.875,
+        "motion_recall": 0.9218,
+        "motion_f1": 0.8978,
+        "tn_allow_correct": 451,
+        "fp_over_filter": 32,
+        "fn_motion_missed": 19,
+        "tp_motion_blocked": 224
+      },
+      "blind_personalized_metrics": {
+        "accuracy": 0.9229,
+        "motion_precision": 0.8528,
+        "motion_recall": 0.93,
+        "motion_f1": 0.8898,
+        "tn_allow_correct": 444,
+        "fp_over_filter": 39,
+        "fn_motion_missed": 17,
+        "tp_motion_blocked": 226
+      }
+    },
+    "108": {
+      "baseline_windows": 120,
+      "baseline_seconds": 120,
+      "feedback_windows": 766,
+      "blind_windows": 767,
+      "personal_calibration_strength": 0.5,
+      "personal_threshold": 0.17,
+      "feedback_metrics_used_for_threshold_only": {
+        "accuracy": 0.8616,
+        "motion_precision": 0.7186,
+        "motion_recall": 0.9021,
+        "motion_f1": 0.8,
+        "tn_allow_correct": 448,
+        "fp_over_filter": 83,
+        "fn_motion_missed": 23,
+        "tp_motion_blocked": 212
+      },
+      "blind_global_frozen_metrics": {
+        "accuracy": 0.9087,
+        "motion_precision": 0.8347,
+        "motion_recall": 0.8771,
+        "motion_f1": 0.8554,
+        "tn_allow_correct": 490,
+        "fp_over_filter": 41,
+        "fn_motion_missed": 29,
+        "tp_motion_blocked": 207
+      },
+      "blind_personalized_metrics": {
+        "accuracy": 0.8892,
+        "motion_precision": 0.7612,
+        "motion_recall": 0.9322,
+        "motion_f1": 0.8381,
+        "tn_allow_correct": 462,
+        "fp_over_filter": 69,
+        "fn_motion_missed": 16,
+        "tp_motion_blocked": 220
+      }
+    }
+  },
+  "samples": {
+    "global_train": 9270,
+    "personalized_blind_total": 1493
+  },
+  "features": [
+    "acc_mean",
+    "acc_std",
+    "acc_max",
+    "acc_range",
+    "acc_rms",
+    "acc_energy",
+    "acc_jerk_mean",
+    "gyro_mean",
+    "gyro_std",
+    "gyro_max",
+    "gyro_energy"
+  ]
+}

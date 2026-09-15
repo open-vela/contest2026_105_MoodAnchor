@@ -1,0 +1,15 @@
+{
+  "task": "WESAD wrist BVP: baseline vs stress",
+  "runtime_note": "IMU/audio wake this independent layer; they are not model features.",
+  "test_subject": "S4",
+  "train_windows": 113,
+  "test_windows": 57,
+  "accuracy": 0.807,
+  "f1": 0.6207,
+  "confusion_matrix": {
+    "tp": 9,
+    "tn": 37,
+    "fp": 0,
+    "fn": 11
+  }
+}

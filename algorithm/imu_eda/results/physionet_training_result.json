@@ -1,0 +1,40 @@
+{
+  "task": "STRESS protocol vs AEROBIC protocol using heart-rate windows only",
+  "label_scope": "Protocol-level proxy; not emotion diagnosis.",
+  "feature_names": [
+    "mean_hr",
+    "std_hr",
+    "max_hr",
+    "delta_from_baseline",
+    "slope_bpm_per_min"
+  ],
+  "train_participants": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S05",
+    "S06",
+    "S07",
+    "S08"
+  ],
+  "test_participants": [
+    "S09",
+    "S10"
+  ],
+  "train_windows": 868,
+  "test_windows": 207,
+  "test_metrics": {
+    "accuracy": 0.715,
+    "precision": 0.6842,
+    "recall": 0.5977,
+    "f1": 0.638,
+    "confusion_matrix": {
+      "tp": 52,
+      "tn": 96,
+      "fp": 24,
+      "fn": 35
+    }
+  },
+  "design_note": "The aerobic class is a deliberate false-positive control. Production routing requires an IMU activity gate before any emotion intervention."
+}
