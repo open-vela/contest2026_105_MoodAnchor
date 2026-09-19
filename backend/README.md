@@ -1,6 +1,6 @@
 ## MoodAnchor 云端对话服务
 
-当前评审版 APK 已内置腾讯云地址和公开评审访问码，2026-09-18 已完成手机实际对话验证。不依赖 AutoDL 或电脑 SSH 中转的部署说明见 [tencent_scf/README.md](tencent_scf/README.md)。Cloudflare Workers 试用实现保留于 [cloudflare/README.md](cloudflare/README.md)，但其默认域名在本项目测试网络无法访问，不作为当前评审入口。旧 APK 需安装新版才能获得新配置；服务在线状态及模型额度不保证持续可用。
+本次提交 APK 已内置腾讯云地址和公开评审访问码，已完成手机实际对话验证。不依赖 AutoDL 或电脑 SSH 中转的部署说明见 [tencent_scf/README.md](tencent_scf/README.md)。Cloudflare Workers 实现保留于 [cloudflare/README.md](cloudflare/README.md)，但其默认域名在本项目测试网络无法访问，不作为本次评审入口。服务在线状态及模型额度不保证持续可用。
 
 这是手机 App 与云端大语言模型之间的轻量中转服务，使用 Python 标准库，无需 `pip install`。
 

@@ -5,7 +5,7 @@
 试用地址：`https://moodanchor-coze-demo.moodanchor-worker.workers.dev`。
 当前 `DEMO_ENABLED=false`，尚未配置模型凭据；本机访问该域名出现 TLS 握手失败，
 因此**公网可访问性、真实模型调用及移动数据网络体验尚未通过验证**。
-旧 Python 后端和旧 APK 不受影响。此版本仅支持 Coze，不托管大模型。
+该实现仅支持 Coze，不托管大模型，且不作为本次评审入口。
 
 ## 部署
 

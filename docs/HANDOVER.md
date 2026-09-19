@@ -7,7 +7,7 @@
 - 黄山派应用：GSR、IMU 读取，LVGL 状态与调试页面，原型规则阈值判定和用户确认弹窗。
 - BLE：Event、Data、Status 和 Control 特征，用于事件上报、状态同步及确认。
 - Android：扫描连接、事件记录、通知、日历、本地音频设置与陪伴对话。
-- 在线对话：评审 APK 内置腾讯云 SCF 地址与公开评审访问码，通过后端调用 Coze；2026-09-18 已完成手机对话验证，不依赖电脑 SSH 或 AutoDL。模型 Key 仅保留于服务端；在线状态与额度不保证持续可用。最新安装包见 [artifacts](../artifacts/README.md)。
+- 在线对话：本次提交 APK 内置腾讯云 SCF 地址与公开评审访问码，通过后端调用 Coze；已完成手机对话验证，不依赖电脑 SSH 或 AutoDL。模型 Key 仅保留于服务端；在线状态与额度不保证持续可用。安装包见 [artifacts](../artifacts/README.md)。
 - 算法：IMU 运动过滤 → EDA 生理确认。端侧串行核心已提供，真实输入适配与主应用接入尚待验证。
 
 算法指标统一见 [ALGORITHM_METRICS.md](ALGORITHM_METRICS.md)。两路公开数据并非同步采集，不报告端到端系统性能。

@@ -114,7 +114,7 @@ OPENVELA_ROOT=/path/to/openvela scripts/build_huangshan.sh
 .\gradlew.bat :app:assembleDebug
 ```
 
-最新评审 APK：[MoodAnchor-debug-20260918.apk](artifacts/MoodAnchor-debug-20260918.apk)。已内置腾讯云 HTTPS 服务地址和评审访问码，安装后可直接进入“陪伴对话”；无需电脑 SSH 中转、AutoDL 或与开发电脑共用局域网。安装包校验与历史版本说明见 [artifacts/README.md](artifacts/README.md)。`local.properties` 是本机 SDK 配置，已被忽略，需由每位开发者自行创建；构建需 JDK 17 和 Android SDK 35。
+本次提交 APK：[MoodAnchor-debug-20260918.apk](artifacts/MoodAnchor-debug-20260918.apk)。已内置腾讯云 HTTPS 服务地址和评审访问码，安装后可直接进入“陪伴对话”；无需电脑 SSH 中转、AutoDL 或与开发电脑共用局域网。安装与提交说明见 [artifacts/README.md](artifacts/README.md)。`local.properties` 是本机 SDK 配置，已被忽略，需由每位开发者自行创建；构建需 JDK 17 和 Android SDK 35。
 
 ### 云端大模型服务
 

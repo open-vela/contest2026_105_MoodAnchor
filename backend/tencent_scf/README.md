@@ -10,7 +10,7 @@
 .\build_package.ps1
 ```
 
-生成的 `MoodAnchor-tencent-scf.zip` 只含 `server.py` 与 `scf_bootstrap`，不含环境变量或凭据；脚本会保留 `scf_bootstrap` 的 Linux 可执行权限。若曾使用旧版 ZIP 上传，请在提交前重新上传此版本。
+生成的 `MoodAnchor-tencent-scf.zip` 只含 `server.py` 与 `scf_bootstrap`，不含环境变量或凭据；脚本会保留 `scf_bootstrap` 的 Linux 可执行权限。提交时请使用此 ZIP。
 
 ## 2. 腾讯云控制台配置
 
